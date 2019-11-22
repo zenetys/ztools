@@ -1,0 +1,215 @@
+#!/bin/bash
+#
+# License: LGPL
+# Author: Benoit DOLEZ <bdolez@zenetys.com>
+# Copyright: 2019
+# Version: 1.0
+#
+
+# NOTES (build from git need docker, rpmspec)
+# - rpmspec that make a non macro spec file, store in SPECS
+# - download sources from git and external repository, store in SOURCES
+# - docker from this directory
+# 
+
+
+function usage() {
+  local IFS=$'\t'
+  exec >&2
+  if [[ $0 == "-bash" ]] ; then return 1 ; fi
+  [[ $# -gt 0 ]] && echo "ERROR: $*"
+  version
+  echo "Usage: ${0##*/} [options] ..."
+  echo "Options:"
+  sed -nr "s/^[[:space:]]*## ([^:]*): /\1\t/p" -- "$0" |
+    while read OPT DESC ; do
+      printf " %-20s %s\n" "$OPT" "$DESC"
+    done
+  echo
+  return 0
+}
+
+function version() {
+  local PROGFILE=$0
+  local VERSION=$(sed -n 's/^# Version: //p' $PROGFILE)
+  local AUTHOR=$(sed -n 's/^# Author: //p' $PROGFILE)
+  local LICENSE=$(sed -n 's/^# License: //p' $PROGFILE)
+
+  echo "${PROGFILE##*/} $VERSION - $AUTHOR - $LICENSE"
+}
+
+declare QUIET=${QUIET}
+declare VERBOSE=${VERBOSE}
+declare XDEBUG=${XDEBUG}
+declare ARGS=( )
+
+declare DIST=${DIST:-el7}
+declare REPO=""
+declare SOURCEDIR=${SOURCEDIR}
+declare OUTPUTDIR=${OUTPUTDIR}
+declare DOWNLOAD=1
+
+if [[ $VERBOSE ]] ; then
+  ( IFS='' ; echo "[DEBUG] '${0}${*/#/' '}'" )
+fi
+
+while (( $# > 0 )); do
+  case "$1" in
+    ## -h, --help: This help
+    -h|--help) usage && exit 0 ;;
+    ## -V, --version: Show version
+    -V|--version) version && exit 0 ;;
+    ## --x-debug: Enable bash debug mode
+    --x-debug)    XDEBUG=1 ;;
+    ## -v, --verbose: Define verbose level (must be repeat)
+    -v|--verbose) ((VERBOSE++)) ;;
+    ## -d, --dist DIST: Define RHEL dist version (el6,el7,el8)
+    -d|--dist) DIST=$2 ; shift ;;
+    ## -s, --source PATH: define source directory
+    -s|--sourcedir) SOURCEDIR=${2%/} ; shift ;;
+    ## -O, --outputdir PATH: define output directory for generated packages 
+    -O|--outputdir) OUTPUTDIR=${2%/} ; shift ;;
+    ## --no-download: skip downloading sources if needed
+    --no-download) DOWNLOAD=0 ; shift ;;
+    ## --repo PATH: local repository
+    --repo) REPO=$2 ; shift ;;
+    ## --update: update repository with new packages
+    --update) UPDATE=1 ;;
+    ## --keep: keep build environment after build_ldflags
+    --keep) KEEP=1 ;;
+    ## --nokeep: never keep build environment on error
+    --nokeep) NOKEEP=1 ;;
+    # generic args
+    --) shift ; break ;;
+    -*) usage "Unknown parameter '$1'" && exit 1 ;;
+    *) ARGS+=( "$1" ) ;;
+  esac
+  shift
+done
+
+[[ $XDEBUG == 1 ]] && set -x
+
+declare SPECFILE=${ARGS[0]}
+[[ ${SPECFILE:0:1} != "/" ]] && SPECFILE=$PWD/$SPECFILE
+
+if [[ ! -r $SPECFILE ]] ; then
+  echo "FATAL: can't open $SPECFILE for reading" >&2
+  exit 1
+elif [[ -d $SPECFILE ]] ; then
+  if [[ -z $SOURCEDIR && -d $SPECFILE/SOURCES ]] ; then
+    SOURCEDIR=$SPECFILE/SOURCES
+  fi
+  if [[ -d $SPECFILE/SPECS ]] ; then
+    SPECFILE=( ${SPECFILE}/SPECS/*.spec )
+  else
+    SPECFILE=( ${SPECFILE}/SPECS/*.spec )
+  fi
+  [[ ${#SPECFILE[@]} != 1 ]] &&
+    echo "FATAL: undefined spec file : '${SPECFILE[*]}' " >&2 && exit 1
+  # define SPECDIR & SPECFILE from SPECFILE
+  SPECDIR=${SPECFILE%/*}
+  SPECFILE=${SPECFILE##*/}
+else
+  # define SPECDIR & SPECFILE from SPECFILE
+  SPECDIR=${SPECFILE%/*}
+  SPECFILE=${SPECFILE##*/}
+  if [[ -z $SOURCEDIR && -d ${SPECDIR%/*}/SOURCES ]] ; then
+    SOURCEDIR=${SPECDIR%/*}/SOURCES
+  fi
+fi
+
+[[ -z $SOURCEDIR ]] && SOURCEDIR=$PWD
+[[ -z $OUTPUTDIR ]] && OUTPUTDIR=$PWD
+[[ ${SOURCEDIR:0:1} != "/" ]] && SOURCEDIR=$PWD/$SOURCEDIR
+[[ ${OUTPUTDIR:0:1} != "/" ]] && OUTPUTDIR=$PWD/$OUTPUTDIR
+
+# echo "SPECFILE: $SPECFILE"
+# echo "SPECDIR: $SPECDIR"
+# echo "SOURCEDIR: $SOURCEDIR"
+# echo "OUTPUTDIR: $OUTPUTDIR"
+
+# auto build docker images for rpmbuild
+if ! docker images -q rpmbuild/$DIST | grep -q . ; then
+  ( 
+    echo "FROM centos:${DIST#el}"
+    echo "RUN yum install -y rpm-build gcc make createrepo"
+    echo "RUN sed -r -i -e 's/^(keepcache)=.*/\1=1/' /etc/yum.conf" 
+    (( ${DIST#el} >= 8 )) && echo "RUN echo keepcache=1 >> /etc/yum.conf"
+    (( ${DIST#el} >= 8 )) && echo "RUN echo keepcache=1 >> /etc/dnf/dnf.conf"
+    echo "RUN echo '*  -  nproc  2048' >> /etc/security/limits.d/90-nproc.conf"
+  ) | docker build -t rpmbuild/$DIST - || exit $?
+fi
+
+# need --noclean to keep generated files in place
+(( ${DIST#el} >= 7 )) && NOCLEAN=--noclean
+
+# Optimization: use rpmspec to view postmacro generated specfile
+IFS=$'\n'
+BUILDREQ=( $(cat $SPECDIR/$SPECFILE |
+               sed -ne 's/^BuildRequires: *//p' |
+               sed -re 's/(( +[^ ,]|[^ ,])*),/\1\n/g' |
+               sed -re 's/^ *([^ ]( +[^ ]|[^ ])*) *$/\1/' ) )
+
+# Options for docker
+DOCKER_OPTS=(
+  --tmpfs /tmp:rw,exec
+  # --mount type=tmpfs,destination=/tmp
+  --mount type=bind,src=/tmp/cache-yum-$DIST,dst=/var/cache/yum
+  --mount type=bind,src=/tmp/cache-yum-$DIST,dst=/var/cache/dnf
+  --mount type=bind,src=$SOURCEDIR,dst=/tmp/SOURCES
+  --mount type=bind,src=$OUTPUTDIR/SRPMS,dst=/tmp/SRPMS
+  --mount type=bind,src=$OUTPUTDIR/RPMS,dst=/tmp/RPMS
+)
+
+# Create local cache
+[[ -d /tmp/cache-yum-$DIST ]] || mkdir -p /tmp/cache-yum-$DIST
+[[ -d $OUTPUTDIR/SRPMS ]] & mkdir -p $OUTPUTDIR/SRPMS
+[[ -d $OUTPUTDIR/RPMS ]] & mkdir -p $OUTPUTDIR/RPMS
+
+# Local repository
+if [[ ${REPO} ]] ; then
+  DOCKER_OPTS+=( --mount type=bind,src=$REPO,dst=/tmp/local-rpms )
+fi
+
+IFS=$''
+( cat <<__EOF__ ; tar c -C ${SPECDIR} $SPECFILE ) | \
+    docker run ${DOCKER_OPTS[@]} -i --rm rpmbuild/$DIST /bin/bash
+function EXIT() {
+ [[ -n "$NOKEEP" ]] && exit \$1
+ [[ -n "$KEEP" || "\$1" != 0 ]] && sleep infinity && exit \$1
+ exit \${1:-0}
+}
+function runme() {
+ set -x
+ tar x -C /tmp
+ [[ -n "${REPO}" ]] && cat >/etc/yum.repos.d/local-rpms.repo <<EOF
+[local-rpms]
+name=Local RPMS
+baseurl=file:///tmp/local-rpms
+enabled=1
+gpgcheck=0
+EOF
+ echo "$(getent passwd $USER)" >> /etc/passwd
+ echo "$(getent group $(id -g))" >> /etc/group
+ [[ ${#BUILDREQ[*]} == 0 ]] || yum install "-y${BUILDREQ[*]/#/" "}" || EXIT \$?
+
+ # as root
+ ( cd /tmp/SOURCES ; md5sum * )
+
+ # as user
+ runuser $USER -c "rpmbuild -D '_topdir /tmp/../tmp/../tmp' -D 'dist .$DIST' $NOCLEAN -ba /tmp/$SPECFILE" || EXIT \$?
+
+ # as root, FIXME keep arch ??
+ if [[ -n "${UPDATE}" ]] ; then
+  tar c -C /tmp RPMS SRPMS | tar x -C /tmp/local-repo &&
+    for repo in /tmp/local-repo/RPMS/* /tmp/local-repo/SRPMS ; do createrepo $repo ; done
+ fi
+ EXIT 0
+}
+runme
+__EOF__
+
+
+
+
+
