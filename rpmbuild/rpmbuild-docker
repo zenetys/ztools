@@ -191,7 +191,7 @@ gpgcheck=0
 EOF
  echo "$(getent passwd $USER)" >> /etc/passwd
  echo "$(getent group $(id -g))" >> /etc/group
- [[ ${#BUILDREQ[*]} == 0 ]] || yum install "-y${BUILDREQ[*]/#/" "}" || EXIT \$?
+ [[ ${#BUILDREQ[*]} == 0 ]] || yum install "-y${BUILDREQ[*]/#/\" \"}" || EXIT \$?
 
  # as root
  ( cd /tmp/SOURCES ; md5sum * )
