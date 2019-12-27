@@ -10,7 +10,7 @@
 # - rpmspec that make a non macro spec file, store in SPECS
 # - download sources from git and external repository, store in SOURCES
 # - docker from this directory
-# 
+#
 
 
 function usage() {
