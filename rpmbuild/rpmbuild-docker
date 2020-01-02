@@ -132,7 +132,7 @@ fi
 if ! docker images -q rpmbuild/$DIST | grep -q . ; then
   ( 
     echo "FROM centos:${DIST#el}"
-    echo "RUN yum install -y rpm-build gcc make createrepo"
+    echo "RUN yum install -y rpm-build gcc make createrepo rpmdevtools"
     echo "RUN sed -r -i -e 's/^(keepcache)=.*/\1=1/' /etc/yum.conf" 
     (( ${DIST#el} >= 8 )) && echo "RUN echo keepcache=1 >> /etc/yum.conf"
     (( ${DIST#el} >= 8 )) && echo "RUN echo keepcache=1 >> /etc/dnf/dnf.conf"
@@ -193,11 +193,19 @@ EOF
  echo "$(getent group $(id -g))" >> /etc/group
  [[ ${#BUILDREQ[*]} == 0 ]] || yum install "-y${BUILDREQ[*]/#/\" \"}" || EXIT \$?
 
+ # create user home for spectool
+ mkdir -p $HOME/rpmbuild && chown -R $USER:$(id -g) $HOME
+
+ # download sources if needed
+ if [[ $DOWNLOAD == 1 ]] ; then
+  runuser $USER -c "spectool --define '_topdir /tmp/../tmp/../tmp' --define 'dist .$DIST' --directory /tmp/SOURCES --all --get-files /tmp/$SPECFILE" || EXIT \$?
+ fi
+
  # as root
  ( cd /tmp/SOURCES ; md5sum * )
 
  # as user
- runuser $USER -c "rpmbuild -D '_topdir /tmp/../tmp/../tmp' -D 'dist .$DIST' $NOCLEAN -ba /tmp/$SPECFILE" || EXIT \$?
+ runuser $USER -c "rpmbuild --define '_topdir /tmp/../tmp/../tmp' --define 'dist .$DIST' $NOCLEAN -ba /tmp/$SPECFILE" || EXIT \$?
 
  # as root, FIXME keep arch ??
  if [[ -n "${UPDATE}" ]] ; then
