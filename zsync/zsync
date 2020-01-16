@@ -1,0 +1,261 @@
+#!/bin/bash
+
+# This script is ment to be run as root.
+if [[ "$UID" != "0" ]]; then
+    sudo_opts=( -u root )
+    [[ -t 0 ]] || sudo_opts=( -n )
+    exec sudo -u root "${sudo_opts[@]}" -- "$0" "$@"
+fi
+
+export LC_ALL=C
+shopt -s nullglob
+set -o pipefail
+set -f
+
+PROGNAME=${0##*/}
+HOSTNAME=$(< /proc/sys/kernel/hostname)
+HOSTNAME=${HOSTNAME%%.*}
+DRY_RUN=1
+LOCK_FILE="/dev/shm/$PROGNAME.lock"
+LOCK_TAKEN=
+
+CONFIG=/etc/zenetys/zsync.cfg
+TIMEOUT=10
+SSH_USER=zsync
+SSH_IDENTITY=~zsync/.ssh/id_rsa
+PEERS=()
+INCLUDES=()
+EXCLUDES=()
+
+if tty -s >/dev/null 2>&1; then
+    declare -A C=(
+        [info]=$'\x1b[1m'
+        [warning]=$'\x1b[7;33m'
+        [error]=$'\x1b[7;91m'
+        [fatal]=$'\x1b[7;1;91m'
+        [blue]=$'\x1b[7;34m'
+        [reset]=$'\x1b[m'
+    )
+    HAS_TTY=1
+else
+    declare -A C=()
+    HAS_TTY=
+fi
+
+function exit_usage() {
+    local status=${1:-0}
+    [[ "$status" != "0" ]] && exec >&2
+
+    echo "\
+Usage: $PROGNAME [OPTION]... [FILE]...
+Rsync wrapper for cluster/HA platforms
+
+Options:
+    -c, --config    Path to configuration file
+    -f, --force     Disable dry-run mode
+    -H, --host      Set target host
+    -i, --include   Add include rule
+    -e, --exclude   Add exclude rule
+    -h, --help      Display this help
+
+Current configuration file: $CONFIG
+
+Use of options -i and/or -e ignores the include/exclude rules
+defined in the configuration file. Similarly, use of option -H
+ignores the peers defined in the configuration file.
+
+These two forms are equivalent:
+    $PROGNAME -i INC1 -i INC2 -e EXC1
+    $PROGNAME -e EXC1 INC1 INC2
+"
+    exit "$status"
+}
+
+function info() {
+    local i;
+    local d=$(date +%Y-%m-%dT%H:%M:%S.%3N%z);
+    local l=info
+    [[ ${1:0:2} == -- ]] && l=${1:2} && shift
+    for i in "$@"; do
+        printf '%s %s %s%s%s %s: %s\n' "$d" "$HOSTNAME" "${C[$l]}" "$l" "${C[reset]}" "$PROGNAME" "$i";
+    done
+}
+
+function fatal() {
+    info --${FUNCNAME[0]} "$@"
+    exit 1
+}
+
+function error() {
+    info --${FUNCNAME[0]} "$@"
+}
+
+function warning() {
+    info --${FUNCNAME[0]} "$@"
+}
+
+function debug() {
+    (( DEBUG == 0 )) && return 0
+    info --${FUNCNAME[0]} "$@"
+}
+
+function take_lock_or_fatal() {
+    if ! ln -sT "/proc/$$" "$LOCK_FILE" 2>/dev/null; then
+        [[ -e "$LOCK_FILE" ]] || release_lock
+        if ! ln -sT "/proc/$$" "$LOCK_FILE" 2>/dev/null; then
+            fatal "Cannot take lock $LOCK_FILE"
+        fi
+    fi
+    LOCK_TAKEN=1
+}
+
+function release_lock() {
+    rm -f "$LOCK_FILE" || return 1
+    LOCK_TAKEN=
+}
+
+function on_exit() {
+    if [[ -n $LOCK_TAKEN ]]; then
+        release_lock
+    fi
+    echo -n "${C[reset]}"
+}
+
+function confirm() {
+    echo -n "$1"
+    read -r
+    if [[ "$REPLY" != [Yy] ]]; then
+        info "Sync aborted at user request"
+        return 1
+    fi
+}
+
+function do_rsync() {
+    local i retval=0 peer_retval
+    local rsync_opts=(
+        --archive # -rlptgoD
+        --one-file-system
+        --compress
+        --checksum
+        --relative
+        --omit-dir-times
+        --delete
+        --rsync-path '[ "$UID" != 0 ] && SUDO="sudo -n -- "; $SUDO rsync'
+        --out-format " # %o %M %B %U:%G  /%f"
+        -e "ssh -T -l '$SSH_USER' -o IdentityFile='$SSH_IDENTITY' \
+-o ConnectTimeout='$TIMEOUT' -o IdentitiesOnly=yes -o BatchMode=yes \
+-o ClearAllForwardings=yes -o CheckHostIP=yes -o StrictHostKeyChecking=yes"
+    )
+
+    local dry_run_format=' # %o %M %B %U:%G  /%f'
+    local sync_format=' > %o /%f'
+
+    for i in "${EXCLUDES[@]}"; do
+        rsync_opts+=( --exclude "$i" )
+    done
+
+    for i in "${PEERS[@]}"; do
+        # bypass myself
+        [[ ${i#*@} == $HOSTNAME ]] && continue
+        if [[ -n $HAS_TTY ]]; then
+            info "${DRY_RUN:+DRY-RUN }rsync to ${C[blue]}${i}${C[reset]}..."
+
+            rsync "${rsync_opts[@]}" --dry-run --out-format "$dry_run_format" "${INCLUDES[@]}" "$i:/"
+            peer_retval=$?
+
+            if (( peer_retval != 0 )); then
+                error "Rsync to $i returned error code $peer_retval"
+                error "Try: ssh-copy-id${SSH_USER:+ -l $SSH_USER} ${SSH_IDENTITY:+-i $SSH_IDENTITY} -o StrictHostKeyChecking=ask $i"
+                retval=1
+                continue
+            fi
+
+            # bypass if diff empty
+            [[ -s $tempfile ]] || continue
+
+            # bypass in dry-run mode
+            [[ -n $DRY_RUN ]] && continue
+
+            confirm "Please confirm to ${C[error]}sync${C[reset]} files? [N/y] " || continue
+        else
+            info "Rsync to $i..."
+        fi
+
+        rsync "${rsync_opts[@]}" --out-format "$sync_format" "${INCLUDES[@]}" "$i:/"
+        peer_retval=$?
+
+        if (( peer_retval == 0 )); then
+            info "Done rsync to $i"
+        else
+            error "Rsync to $i returned error code $peer_retval"
+            retval=1
+        fi
+    done
+
+    return "$retval"
+}
+
+peers=()
+includes=()
+excludes=()
+
+while (( $# > 0 )); do
+    case "$1" in
+        -c|--config) CONFIG=$2; shift ;;
+        -f|--force) DRY_RUN= ;;
+        -H|--host) peers+=( "$2" ); shift ;;
+        -i|--include) includes+=( "$2" ); shift ;;
+        -e|--exclude) excludes+=( "$2" ); shift ;;
+        -h|--help) exit_usage ;;
+        --) shift; break ;;
+        -*) exit_usage 1 ;;
+        *)  includes+=( "$1" ) ;;
+    esac
+    shift
+done
+
+includes+=( "$@" )
+
+trap on_exit EXIT
+
+if [[ -z $CONFIG || ! -r $CONFIG ]] || ! source "$CONFIG"; then
+    fatal "Cannot load configuration file '$CONFIG'"
+fi
+
+if (( ${#peers[@]} > 0 )); then
+    PEERS=( "${peers[@]}" )
+fi
+
+[[ -z $PEERS ]] && fatal "No peers to sync with"
+
+[[ $SSH_IDENTITY && ! -r $SSH_IDENTITY ]] &&
+  fatal "Cannot read SSH identity '$SSH_IDENTITY'"
+
+SSHCMD=(
+    ssh -T
+    ${SSH_USER:+-l $SSH_USER}
+    ${SSH_IDENTITY:+-o IdentityFile=$SSH_IDENTITY}
+    -o ConnectTimeout=$TIMEOUT
+    -o IdentitiesOnly=yes
+    -o BatchMode=no
+    -o ClearAllForwardings=yes
+    -o CheckHostIP=yes
+    -o StrictHostKeyChecking=ask
+)
+
+(( ${#includes[@]} > 0 )) && INCLUDES=( "${includes[@]}" )
+(( ${#excludes[@]} > 0 )) && EXCLUDES=( "${excludes[@]}" )
+
+[[ -z $INCLUDES ]] && fatal "Noting to include for sync"
+
+for i in "${INCLUDES[@]}"; do
+    if [[ ${i:0:1} != / ]]; then
+        fatal "Expected absolute path for include '$i'"
+    elif [[ ! -e $i ]]; then
+        fatal "Include file '$i' does not exist"
+    fi
+done
+
+[[ -z $DRY_RUN ]] && take_lock_or_fatal
+
+do_rsync
