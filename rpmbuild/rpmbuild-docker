@@ -92,15 +92,15 @@ done
 declare SPECFILE=${ARGS[0]}
 [[ ${SPECFILE:0:1} != "/" ]] && SPECFILE=$PWD/$SPECFILE
 
+# cleanup potential trailing slashes
+SPECFILE=${SPECFILE%${SPECFILE##*[!/]}}
+
 if [[ ! -r $SPECFILE ]] ; then
   echo "FATAL: can't open $SPECFILE for reading" >&2
   exit 1
 fi
 
 if [[ -d $SPECFILE ]] ; then
-  if [[ -z $SOURCEDIR && -d $SPECFILE/SOURCES ]] ; then
-    SOURCEDIR=$SPECFILE/SOURCES
-  fi
   if [[ -d $SPECFILE/SPECS ]] ; then
     SPECFILE=( ${SPECFILE}/SPECS/*.spec )
   else
@@ -111,16 +111,14 @@ if [[ -d $SPECFILE ]] ; then
     echo "FATAL: undefined spec file : '${SPECFILE[*]}' " >&2
     exit 1
   fi
-  # define SPECDIR & SPECFILE from SPECFILE
-  SPECDIR=${SPECFILE%/*}
-  SPECFILE=${SPECFILE##*/}
-else
-  # define SPECDIR & SPECFILE from SPECFILE
-  SPECDIR=${SPECFILE%/*}
-  SPECFILE=${SPECFILE##*/}
-  if [[ -z $SOURCEDIR && -d ${SPECDIR%/*}/SOURCES ]] ; then
-    SOURCEDIR=${SPECDIR%/*}/SOURCES
-  fi
+fi
+
+# define SPECDIR & SPECFILE from SPECFILE
+SPECDIR=${SPECFILE%/*}
+SPECFILE=${SPECFILE##*/}
+
+if [[ -z $SOURCEDIR && -d ${SPECDIR%/*}/SOURCES ]] ; then
+  SOURCEDIR=${SPECDIR%/*}/SOURCES
 fi
 
 [[ -z $SOURCEDIR ]] && SOURCEDIR=$PWD
