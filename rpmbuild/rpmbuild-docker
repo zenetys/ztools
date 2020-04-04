@@ -106,8 +106,11 @@ if [[ -d $SPECFILE ]] ; then
   else
     SPECFILE=( ${SPECFILE}/*.spec )
   fi
-  [[ ${#SPECFILE[@]} != 1 ]] &&
-    echo "FATAL: undefined spec file : '${SPECFILE[*]}' " >&2 && exit 1
+
+  if [[ ${#SPECFILE[@]} != 1 ]]; then
+    echo "FATAL: undefined spec file : '${SPECFILE[*]}' " >&2
+    exit 1
+  fi
   # define SPECDIR & SPECFILE from SPECFILE
   SPECDIR=${SPECFILE%/*}
   SPECFILE=${SPECFILE##*/}
