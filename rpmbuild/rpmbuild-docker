@@ -180,44 +180,44 @@ IFS=$''
 ( cat <<__EOF__ ; tar c -C ${SPECDIR} $SPECFILE ) | \
     docker run ${DOCKER_OPTS[@]} -i --rm rpmbuild/$DIST /bin/bash
 function EXIT() {
- [[ -n "$NOKEEP" ]] && exit \$1
- [[ -n "$KEEP" || "\$1" != 0 ]] && sleep infinity && exit \$1
- exit \${1:-0}
+  [[ -n "$NOKEEP" ]] && exit \$1
+  [[ -n "$KEEP" || "\$1" != 0 ]] && sleep infinity && exit \$1
+  exit \${1:-0}
 }
 function runme() {
- set -x
- tar x -C /tmp
- [[ -n "${REPO}" ]] && cat >/etc/yum.repos.d/local-rpms.repo <<EOF
+  set -x
+  tar x -C /tmp
+  [[ -n "${REPO}" ]] && cat >/etc/yum.repos.d/local-rpms.repo <<EOF
 [local-rpms]
 name=Local RPMS
 baseurl=file:///tmp/local-rpms
 enabled=1
 gpgcheck=0
 EOF
- echo "$(getent passwd $USER)" >> /etc/passwd
- echo "$(getent group $(id -g))" >> /etc/group
- [[ ${#BUILDREQ[*]} == 0 ]] || yum install "-y${BUILDREQ[*]/#/\" \"}" || EXIT \$?
+  echo "$(getent passwd $USER)" >> /etc/passwd
+  echo "$(getent group $(id -g))" >> /etc/group
+  [[ ${#BUILDREQ[*]} == 0 ]] || yum install "-y${BUILDREQ[*]/#/\" \"}" || EXIT \$?
 
- # create user home for spectool
- mkdir -p $HOME/rpmbuild && chown -R $USER:$(id -g) $HOME
+  # create user home for spectool
+  mkdir -p $HOME/rpmbuild && chown -R $USER:$(id -g) $HOME
 
- # download sources if needed
- if [[ $DOWNLOAD == 1 ]] ; then
-  runuser $USER -c "spectool --define '_topdir /tmp/../tmp/../tmp' --define 'dist .$DIST' --directory /tmp/SOURCES --all --get-files /tmp/$SPECFILE" || EXIT \$?
- fi
+  # download sources if needed
+  if [[ $DOWNLOAD == 1 ]] ; then
+    runuser $USER -c "spectool --define '_topdir /tmp/../tmp/../tmp' --define 'dist .$DIST' --directory /tmp/SOURCES --all --get-files /tmp/$SPECFILE" || EXIT \$?
+  fi
 
- # as root
- ( cd /tmp/SOURCES ; md5sum * )
+  # as root
+  ( cd /tmp/SOURCES ; md5sum * )
 
- # as user
- runuser $USER -c "rpmbuild --define '_topdir /tmp/../tmp/../tmp' --define 'dist .$DIST' $NOCLEAN -ba /tmp/$SPECFILE" || EXIT \$?
+  # as user
+  runuser $USER -c "rpmbuild --define '_topdir /tmp/../tmp/../tmp' --define 'dist .$DIST' $NOCLEAN -ba /tmp/$SPECFILE" || EXIT \$?
 
- # as root, FIXME keep arch ??
- if [[ -n "${UPDATE}" ]] ; then
-  tar c -C /tmp RPMS SRPMS | tar x -C /tmp/local-repo &&
-    for repo in /tmp/local-repo/RPMS/* /tmp/local-repo/SRPMS ; do createrepo $repo ; done
- fi
- EXIT 0
+  # as root, FIXME keep arch ??
+  if [[ -n "${UPDATE}" ]] ; then
+    tar c -C /tmp RPMS SRPMS | tar x -C /tmp/local-repo &&
+      for repo in /tmp/local-repo/RPMS/* /tmp/local-repo/SRPMS ; do createrepo $repo ; done
+  fi
+  EXIT 0
 }
 runme
 __EOF__
