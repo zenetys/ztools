@@ -95,7 +95,9 @@ declare SPECFILE=${ARGS[0]}
 if [[ ! -r $SPECFILE ]] ; then
   echo "FATAL: can't open $SPECFILE for reading" >&2
   exit 1
-elif [[ -d $SPECFILE ]] ; then
+fi
+
+if [[ -d $SPECFILE ]] ; then
   if [[ -z $SOURCEDIR && -d $SPECFILE/SOURCES ]] ; then
     SOURCEDIR=$SPECFILE/SOURCES
   fi
