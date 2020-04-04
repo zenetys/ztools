@@ -47,6 +47,7 @@ declare DIST=${DIST:-el7}
 declare REPO=""
 declare SOURCEDIR=${SOURCEDIR}
 declare OUTPUTDIR=${OUTPUTDIR}
+declare PREBUILDSCRIPT=${PREBUILDSCRIPT}
 declare DOWNLOAD=1
 
 if [[ $VERBOSE ]] ; then
@@ -121,6 +122,14 @@ if [[ -z $SOURCEDIR && -d ${SPECDIR%/*}/SOURCES ]] ; then
   SOURCEDIR=${SPECDIR%/*}/SOURCES
 fi
 
+# find prebuild script
+if [[ -z $PREBUILDSCRIPT && -x $SPECDIR/prebuild.sh ]]; then
+  PREBUILDSCRIPT=$SPECDIR/prebuild.sh
+fi
+if [[ -z $PREBUILDSCRIPT && -x ${SPECDIR%/*}/prebuild.sh ]]; then
+  PREBUILDSCRIPT=${SPECDIR%/*}/prebuild.sh
+fi
+
 [[ -z $SOURCEDIR ]] && SOURCEDIR=$PWD
 [[ -z $OUTPUTDIR ]] && OUTPUTDIR=$PWD
 [[ ${SOURCEDIR:0:1} != "/" ]] && SOURCEDIR=$PWD/$SOURCEDIR
@@ -130,6 +139,7 @@ fi
 # echo "SPECDIR: $SPECDIR"
 # echo "SOURCEDIR: $SOURCEDIR"
 # echo "OUTPUTDIR: $OUTPUTDIR"
+# echo "PREBUILDSCRIPT: $PREBUILDSCRIPT"
 
 # auto build docker images for rpmbuild
 if ! docker images -q rpmbuild/$DIST | grep -q . ; then
@@ -174,6 +184,11 @@ if [[ ${REPO} ]] ; then
   DOCKER_OPTS+=( --mount type=bind,src=$REPO,dst=/tmp/local-rpms )
 fi
 
+# Prebuild script
+if [[ ${PREBUILDSCRIPT} ]] ; then
+  DOCKER_OPTS+=( --mount type=bind,src=$PREBUILDSCRIPT,dst=/tmp/${PREBUILDSCRIPT##*/} )
+fi
+
 IFS=$''
 ( cat <<__EOF__ ; tar c -C ${SPECDIR} $SPECFILE ) | \
     docker run ${DOCKER_OPTS[@]} -i --rm rpmbuild/$DIST /bin/bash
@@ -194,6 +209,11 @@ gpgcheck=0
 EOF
   echo "$(getent passwd $USER)" >> /etc/passwd
   echo "$(getent group $(id -g))" >> /etc/group
+
+  if [[ -n "$PREBUILDSCRIPT" ]] ; then
+    DIST=$DIST /tmp/${PREBUILDSCRIPT##*/} || EXIT \$?
+  fi
+
   [[ ${#BUILDREQ[*]} == 0 ]] || yum install "-y${BUILDREQ[*]/#/\" \"}" || EXIT \$?
 
   # create user home for spectool
