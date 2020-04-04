@@ -166,7 +166,6 @@ BUILDREQ=( $(cat $SPECDIR/$SPECFILE |
 # Options for docker
 DOCKER_OPTS=(
   --tmpfs /tmp:rw,exec
-  # --mount type=tmpfs,destination=/tmp
   --mount type=bind,src=/tmp/cache-yum-$DIST,dst=/var/cache/yum
   --mount type=bind,src=/tmp/cache-yum-$DIST,dst=/var/cache/dnf
   --mount type=bind,src=$SOURCEDIR,dst=/tmp/SOURCES
