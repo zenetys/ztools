@@ -145,7 +145,7 @@ if ! docker images -q rpmbuild/$DIST | grep -q . ; then
   ) | docker build -t rpmbuild/$DIST - || exit $?
 fi
 
-# need --noclean to keep generated files in place
+# need rpmbuild --noclean option to keep generated files in place
 (( ${DIST#el} >= 7 )) && NOCLEAN=--noclean
 
 # Optimization: use rpmspec to view postmacro generated specfile
