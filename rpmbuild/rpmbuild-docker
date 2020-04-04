@@ -166,6 +166,7 @@ BUILDREQ=( $(cat $SPECDIR/$SPECFILE |
 # Options for docker
 DOCKER_OPTS=(
   --tmpfs /tmp:rw,exec
+  --mount type=bind,src=$SPECDIR/$SPECFILE,dst=/tmp/$SPECFILE
   --mount type=bind,src=/tmp/cache-yum-$DIST,dst=/var/cache/yum
   --mount type=bind,src=/tmp/cache-yum-$DIST,dst=/var/cache/dnf
   --mount type=bind,src=$SOURCEDIR,dst=/tmp/SOURCES
@@ -189,7 +190,7 @@ if [[ ${PREBUILDSCRIPT} ]] ; then
 fi
 
 IFS=$''
-( cat <<__EOF__ ; tar c -C ${SPECDIR} $SPECFILE ) | \
+( cat <<__EOF__ ) | \
     docker run ${DOCKER_OPTS[@]} -i --rm rpmbuild/$DIST /bin/bash
 function EXIT() {
   [[ -n "$NOKEEP" ]] && exit \$1
@@ -198,7 +199,6 @@ function EXIT() {
 }
 function runme() {
   set -x
-  tar x -C /tmp
   [[ -n "${REPO}" ]] && cat >/etc/yum.repos.d/local-rpms.repo <<EOF
 [local-rpms]
 name=Local RPMS
