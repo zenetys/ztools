@@ -104,7 +104,7 @@ if [[ -d $SPECFILE ]] ; then
   if [[ -d $SPECFILE/SPECS ]] ; then
     SPECFILE=( ${SPECFILE}/SPECS/*.spec )
   else
-    SPECFILE=( ${SPECFILE}/SPECS/*.spec )
+    SPECFILE=( ${SPECFILE}/*.spec )
   fi
   [[ ${#SPECFILE[@]} != 1 ]] &&
     echo "FATAL: undefined spec file : '${SPECFILE[*]}' " >&2 && exit 1
