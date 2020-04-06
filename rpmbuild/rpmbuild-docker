@@ -193,13 +193,6 @@ fi
 # need rpmbuild --noclean option to keep generated files in place
 (( ${DIST#el} >= 7 )) && NOCLEAN=--noclean
 
-# Optimization: use rpmspec to view postmacro generated specfile
-IFS=$'\n'
-BUILDREQ=( $(cat $SPECDIR/$SPECFILE |
-               sed -ne 's/^BuildRequires: *//p' |
-               sed -re 's/(( +[^ ,]|[^ ,])*),/\1\n/g' |
-               sed -re 's/^ *([^ ]( +[^ ]|[^ ])*) *$/\1/' ) )
-
 # Options for docker
 DOCKER_OPTS=(
   --tmpfs /tmp:rw,exec
@@ -253,7 +246,13 @@ EOF
     DIST=$DIST /tmp/${PREBUILDSCRIPT##*/} || EXIT \$?
   fi
 
-  [[ ${#BUILDREQ[*]} == 0 ]] || yum install "-y${BUILDREQ[*]/#/\" \"}" || EXIT \$?
+  buildreq=( \$(rpmspec -P /tmp/$SPECFILE |
+    sed -ne 's/^BuildRequires: *//p' |
+    sed -re 's/(( +[^ ,]|[^ ,])*),/\1\n/g' |
+    sed -re 's/^ *([^ ]( +[^ ]|[^ ])*) *$/\1/') )
+  if [[ -n \$buildreq ]]; then
+    yum install -y "\${buildreq[@]}" || EXIT \$?
+  fi
 
   # create user home for spectool
   mkdir -p $HOME/rpmbuild && chown -R $USER:$(id -g) $HOME
