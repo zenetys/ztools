@@ -195,9 +195,10 @@ trap 'docker kill "$CTNAME"; exit;' INT
 IFS=$''
 cat <<__EOF__ |docker run "${DOCKER_OPTS[@]}" "rpmbuild/$DIST" /bin/bash &
 function EXIT() {
-  [[ -n "$NOKEEP" ]] && exit \$1
-  [[ -n "$KEEP" || "\$1" != 0 ]] && sleep infinity && exit \$1
-  exit \${1:-0}
+  local status=\${1:-0}
+  [[ -n "$NOKEEP" ]] && exit \$status
+  [[ -n "$KEEP" || \$status != 0 ]] && sleep infinity
+  exit \$status
 }
 function runme() {
   set -x
