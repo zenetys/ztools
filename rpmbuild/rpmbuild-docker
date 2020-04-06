@@ -200,6 +200,7 @@ DOCKER_OPTS=(
   --mount type=bind,src=$SPECDIR/$SPECFILE,dst=/tmp/$SPECFILE
   --mount type=bind,src=$CACHEBASE/cache-yum-$DIST,dst=/var/cache/yum
   --mount type=bind,src=$CACHEBASE/cache-yum-$DIST,dst=/var/cache/dnf
+  --mount type=bind,src=$CACHEBASE/cache-shared,dst=/tmp/cache-shared
   --mount type=bind,src=$SOURCEDIR,dst=/tmp/SOURCES
   --mount type=bind,src=$OUTPUTDIR/SRPMS,dst=/tmp/SRPMS
   --mount type=bind,src=$OUTPUTDIR/RPMS,dst=/tmp/RPMS
@@ -207,6 +208,7 @@ DOCKER_OPTS=(
 
 # Create local cache
 [[ -d $CACHEBASE/cache-yum-$DIST ]] || mkdir -p $CACHEBASE/cache-yum-$DIST
+[[ -d $CACHEBASE/cache-shared ]] || mkdir -p /tmp/cache-shared
 [[ -d $OUTPUTDIR/SRPMS ]] & mkdir -p $OUTPUTDIR/SRPMS
 [[ -d $OUTPUTDIR/RPMS ]] & mkdir -p $OUTPUTDIR/RPMS
 
@@ -231,6 +233,12 @@ function EXIT() {
   [[ -n "$KEEP" || \$status != 0 ]] && sleep infinity
   exit \$status
 }
+function dl() {
+  [[ -f \$CACHEDIR/\${1##*/} ]] && return 0
+  (cd "\$CACHEDIR" && curl -fROL --connect-timeout 15 "\$1")
+}
+export -f dl
+export CACHEDIR=/tmp/cache-shared DIST=$DIST
 function runme() {
   set -x
   [[ -n "${REPO}" ]] && cat >/etc/yum.repos.d/local-rpms.repo <<EOF
@@ -244,7 +252,7 @@ EOF
   echo "$(getent group $(id -g))" >> /etc/group
 
   if [[ -n "$PREBUILDSCRIPT" ]] ; then
-    DIST=$DIST /tmp/${PREBUILDSCRIPT##*/} || EXIT \$?
+    /tmp/${PREBUILDSCRIPT##*/} || EXIT \$?
   fi
 
   buildreq=( \$(rpmspec -P /tmp/$SPECFILE |
