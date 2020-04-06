@@ -189,9 +189,11 @@ if [[ ${PREBUILDSCRIPT} ]] ; then
   DOCKER_OPTS+=( --mount type=bind,src=$PREBUILDSCRIPT,dst=/tmp/${PREBUILDSCRIPT##*/} )
 fi
 
+CTNAME="build_${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
+DOCKER_OPTS+=( --name "$CTNAME" -i --rm )
+trap 'docker kill "$CTNAME"; exit;' INT
 IFS=$''
-( cat <<__EOF__ ) | \
-    docker run ${DOCKER_OPTS[@]} -i --rm rpmbuild/$DIST /bin/bash
+cat <<__EOF__ |docker run "${DOCKER_OPTS[@]}" "rpmbuild/$DIST" /bin/bash &
 function EXIT() {
   [[ -n "$NOKEEP" ]] && exit \$1
   [[ -n "$KEEP" || "\$1" != 0 ]] && sleep infinity && exit \$1
@@ -238,6 +240,7 @@ EOF
 }
 runme
 __EOF__
+wait "$!"
 
 
 
