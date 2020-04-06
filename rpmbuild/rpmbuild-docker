@@ -228,7 +228,7 @@ EOF
 
   # download sources if needed
   if [[ $DOWNLOAD == 1 ]] ; then
-    runuser $USER -c "spectool --define '_topdir /tmp/../tmp/../tmp' --define 'dist .$DIST' --directory /tmp/SOURCES --all --get-files /tmp/$SPECFILE" || EXIT \$?
+    runuser $USER -c "spectool --define 'dist .$DIST' --directory /tmp/SOURCES --all --get-files /tmp/$SPECFILE" || EXIT \$?
   fi
 
   # as root
