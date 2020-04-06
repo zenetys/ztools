@@ -235,6 +235,8 @@ EOF
   ( cd /tmp/SOURCES ; md5sum * )
 
   # as user
+  # Having _topdir /tmp causes problems in el6/el7 because it is not long enough
+  # https://access.redhat.com/solutions/1426113
   runuser $USER -c "rpmbuild --define '_topdir /tmp/../tmp/../tmp' --define 'dist .$DIST' $NOCLEAN -ba /tmp/$SPECFILE" || EXIT \$?
 
   # as root, FIXME keep arch ??
