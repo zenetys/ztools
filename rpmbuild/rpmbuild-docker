@@ -141,16 +141,21 @@ fi
 # echo "OUTPUTDIR: $OUTPUTDIR"
 # echo "PREBUILDSCRIPT: $PREBUILDSCRIPT"
 
+function dockerfile() {
+  echo "FROM centos:${DIST#el}"
+  echo "RUN yum install -y rpm-build gcc make createrepo rpmdevtools"
+  echo "RUN sed -r -i -e 's/^(keepcache)=.*/\1=1/' /etc/yum.conf"
+  (( ${DIST#el} >= 8 )) && echo "RUN echo keepcache=1 >> /etc/yum.conf"
+  (( ${DIST#el} >= 8 )) && echo "RUN echo keepcache=1 >> /etc/dnf/dnf.conf"
+  echo "RUN echo '*  -  nproc  2048' >> /etc/security/limits.d/90-nproc.conf"
+}
+
+image="rpmbuild/$DIST:$(dockerfile |md5sum |sed -re 's,^(.{7}).*,\1,')"
+echo "Docker image: $image"
+
 # auto build docker images for rpmbuild
-if ! docker images -q rpmbuild/$DIST | grep -q . ; then
-  ( 
-    echo "FROM centos:${DIST#el}"
-    echo "RUN yum install -y rpm-build gcc make createrepo rpmdevtools"
-    echo "RUN sed -r -i -e 's/^(keepcache)=.*/\1=1/' /etc/yum.conf" 
-    (( ${DIST#el} >= 8 )) && echo "RUN echo keepcache=1 >> /etc/yum.conf"
-    (( ${DIST#el} >= 8 )) && echo "RUN echo keepcache=1 >> /etc/dnf/dnf.conf"
-    echo "RUN echo '*  -  nproc  2048' >> /etc/security/limits.d/90-nproc.conf"
-  ) | docker build -t rpmbuild/$DIST - || exit $?
+if ! docker images -q "$image" | grep -q . ; then
+  dockerfile |docker build -t "$image" - || exit $?
 fi
 
 # need rpmbuild --noclean option to keep generated files in place
@@ -193,7 +198,7 @@ CTNAME="build_${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
 DOCKER_OPTS+=( --name "$CTNAME" -i --rm )
 trap 'docker kill "$CTNAME"; exit;' INT
 IFS=$''
-cat <<__EOF__ |docker run "${DOCKER_OPTS[@]}" "rpmbuild/$DIST" /bin/bash &
+cat <<__EOF__ |docker run "${DOCKER_OPTS[@]}" "$image" /bin/bash &
 function EXIT() {
   local status=\${1:-0}
   [[ -n "$NOKEEP" ]] && exit \$status
