@@ -146,7 +146,9 @@ function dockerfile() {
 
   # Build the docker base image used to build RPM packages.
   # Do a single big RUN to avoid unnecessary intermediate layers.
+  # The rpmspec tools is not available in el6
   echo "RUN set -x && \\
+    yum update -y && \\
     yum install -y createrepo gcc make rpm-build rpmdevtools && \\
     echo '* - nproc 2048' >> /etc/security/limits.d/90-nproc.conf && \\
 $(if (( ${DIST#el} >= 8 )); then cat <<'EOF'
@@ -155,6 +157,26 @@ $(if (( ${DIST#el} >= 8 )); then cat <<'EOF'
 EOF
 else cat <<'EOF'
     sed -r -i -e 's/^(keepcache)=.*/\1=1/' /etc/yum.conf && \
+EOF
+fi)
+$(if [[ $DIST == el6 ]]; then cat <<'EOF'
+    yum install -y bzip2-devel db4-devel elfutils-devel elfutils-libelf-devel file-devel gawk gettext-devel libacl-devel libcap-devel libtool lua-devel ncurses-devel nss-devel nss-softokn-freebl-devel popt-devel python-devel readline-devel redhat-rpm-config xz-devel zlib-devel && \
+    { curl -OL --connect-timeout 15 http://ftp.rpm.org/releases/rpm-4.11.x/rpm-4.11.3.tar.bz2 || \
+      curl -OL --connect-timeout 15 http://ftp.lip6.fr/pub/linux/rpm/releases/rpm-4.11.x/rpm-4.11.3.tar.bz2; } && \
+    tar xvjf rpm-4.11.3.tar.bz2 && \
+    cd rpm-4.11.3 && \
+    export CFLAGS=$(rpm -E '%{optflags}') && \
+    export CPPFLAGS="$(pkg-config --cflags nss) -USYSCONFDIR -DSYSCONFDIR=\\\"/etc\\\" -ULOCALSTATEDIR -DLOCALSTATEDIR=\\\"/var\\\" -URPMCONFIGDIR -DRPMCONFIGDIR=\\\"/usr/lib/rpm\\\" -URPMCONFIGDIR -DRPMCONFIGDIR=\\\"/usr/lib/rpm\\\"" && \
+    autoreconf -i && \
+    ./configure --enable-static=yes --enable-shared=no --build=x86_64-redhat-linux-gnu --host=x86_64-redhat-linux-gnu --with-vendor=redhat --with-external-db --with-lua --with-cap --with-acl --without-selinux --disable-python --disable-plugins --disable-nls && \
+    make && \
+    cp -a rpmspec /usr/local/bin/ && \
+    cd .. && \
+    rm -rfv rpm-4.11.3.tar.bz2 rpm-4.11.3 && \
+    yum history undo -y $(yum history |awk '$1 ~ /^[0-9]$/ { print $1; exit; }') && \
+EOF
+else cat <<'EOF'
+    true && \
 EOF
 fi)
     yum clean all"
