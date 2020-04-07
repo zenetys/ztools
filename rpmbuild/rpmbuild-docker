@@ -233,6 +233,10 @@ function EXIT() {
   [[ -n "$KEEP" || \$status != 0 ]] && sleep infinity
   exit \$status
 }
+function runas() {
+  printf -v qcmd "%q " "\${@:2}"
+  runuser -l "\$1" -c "\$qcmd"
+}
 function dl() {
   [[ -f \$CACHEDIR/\${1##*/} ]] && return 0
   (cd "\$CACHEDIR" && curl -fROL --connect-timeout 15 "\$1")
@@ -277,7 +281,7 @@ EOF
   # as user
   # Having _topdir /tmp causes problems in el6/el7 because it is not long enough
   # https://access.redhat.com/solutions/1426113
-  runuser $USER -c "rpmbuild --define '_topdir /tmp/../tmp/../tmp' --define 'dist .$DIST' $NOCLEAN -ba /tmp/$SPECFILE" || EXIT \$?
+  runas $USER rpmbuild --define '_topdir /tmp/../tmp/../tmp' --define 'dist .$DIST' $NOCLEAN -ba /tmp/$SPECFILE || EXIT \$?
 
   # as root, FIXME keep arch ??
   if [[ -n "${UPDATE}" ]] ; then
