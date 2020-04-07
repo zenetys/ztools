@@ -150,7 +150,7 @@ function dockerfile() {
   # The rpmspec tools is not available in el6
   echo "RUN set -x && \\
     yum update -y && \\
-    yum install -y createrepo gcc make rpm-build rpmdevtools && \\
+    yum install -y createrepo gcc make rpm-build && \\
     echo '* - nproc 2048' >> /etc/security/limits.d/90-nproc.conf && \\
 $(if (( ${DIST#el} >= 8 )); then cat <<'EOF'
     echo keepcache=1 >> /etc/yum.conf && \
@@ -238,10 +238,19 @@ function runas() {
   runuser -l "\$1" -c "\$qcmd"
 }
 function dl() {
-  [[ -f \$CACHEDIR/\${1##*/} ]] && return 0
-  (cd "\$CACHEDIR" && curl -fROL --connect-timeout 15 "\$1")
+  local curlopts=( -fRL --connect-timeout 15 ) dest=\${2:-\$CACHEDIR} retval
+  if [[ \$1 =~ ^(.+)#?/([^/]+)$ ]]; then
+    [[ -f \$dest/\${BASH_REMATCH[2]} ]] && return 0
+    \${RUNAS:+runas "\$RUNAS" }curl "\${curlopts[@]}" -o "\$dest/\${BASH_REMATCH[2]}" "\$1"
+    retval=\$?
+    REPLY="cURL return code \$retval"
+    return "\$retval"
+  else
+    REPLY='URL not supported'
+    return 1
+  fi
 }
-export -f dl
+export -f dl runas
 export CACHEDIR=/tmp/cache-shared DIST=$DIST
 function runme() {
   set -x
@@ -272,7 +281,9 @@ EOF
 
   # download sources if needed
   if [[ $DOWNLOAD == 1 ]] ; then
-    runuser $USER -c "spectool --define 'dist .$DIST' --directory /tmp/SOURCES --all --get-files /tmp/$SPECFILE" || EXIT \$?
+    dlsources=( \$(rpmspec -P /tmp/$SPECFILE |
+      sed -nr -e 's,^(source|patch)[0-9]*\s*:\s*(\S+).*,\2,i;T;/:\/\//p') )
+    for i in "\${dlsources[@]}"; do RUNAS=$USER dl "\$i" /tmp/SOURCES || EXIT \$?; done
   fi
 
   # as root
