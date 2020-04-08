@@ -6,13 +6,6 @@
 # Version: 1.0
 #
 
-# NOTES (build from git need docker, rpmspec)
-# - rpmspec that make a non macro spec file, store in SPECS
-# - download sources from git and external repository, store in SOURCES
-# - docker from this directory
-#
-
-
 function usage() {
   local IFS=$'\t'
   exec >&2
