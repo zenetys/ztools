@@ -189,7 +189,9 @@ EOF
 
 # Lookup "docker build" source to build a base image for $DIST.
 function dockerfile_for_dist() {
-  if declare -f -F "dockerfile_for_dist_$DIST" >/dev/null; then
+  if [[ -f ~/.config/${0##*/}/Dockerfile.$DIST ]]; then
+    cat ~/.config/"${0##*/}/Dockerfile.$DIST"
+  elif declare -f -F "dockerfile_for_dist_$DIST" >/dev/null; then
     "dockerfile_for_dist_$DIST"
   else
     return 1
