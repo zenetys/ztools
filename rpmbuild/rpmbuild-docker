@@ -38,7 +38,8 @@ declare ARGS=( )
 
 declare CACHEBASE=${CACHEBASE:-/tmp}
 declare DIST=${DIST:-el7}
-declare REPO=""
+#FIXME
+#declare REPO=""
 declare SOURCEDIR=${SOURCEDIR}
 declare OUTPUTDIR=${OUTPUTDIR}
 declare PREBUILDSCRIPT=${PREBUILDSCRIPT}
@@ -66,10 +67,11 @@ while (( $# > 0 )); do
     -O|--outputdir) OUTPUTDIR=${2%/} ; shift ;;
     ## --no-download: skip downloading sources if needed
     --no-download) DOWNLOAD=0 ; shift ;;
-    ## --repo PATH: local repository
-    --repo) REPO=$2 ; shift ;;
-    ## --update: update repository with new packages
-    --update) UPDATE=1 ;;
+#FIXME
+#    ## --repo PATH: local repository
+#    --repo) REPO=$2 ; shift ;;
+#    ## --update: update repository with new packages
+#    --update) UPDATE=1 ;;
     ## --keep: keep build environment after build_ldflags
     --keep) KEEP=1 ;;
     ## --nokeep: never keep build environment on error
@@ -235,10 +237,11 @@ DOCKER_OPTS=(
 [[ -d $OUTPUTDIR/SRPMS ]] & mkdir -p $OUTPUTDIR/SRPMS
 [[ -d $OUTPUTDIR/RPMS ]] & mkdir -p $OUTPUTDIR/RPMS
 
-# Local repository
-if [[ ${REPO} ]] ; then
-  DOCKER_OPTS+=( --mount type=bind,src=$REPO,dst=/tmp/local-rpms )
-fi
+#FIXME
+## Local repository
+#if [[ ${REPO} ]] ; then
+#  DOCKER_OPTS+=( --mount type=bind,src=$REPO,dst=/tmp/local-rpms )
+#fi
 
 # Prebuild script
 if [[ ${PREBUILDSCRIPT} ]] ; then
@@ -277,13 +280,14 @@ export -f dl runas
 export CACHEDIR=/tmp/cache-shared DIST=$DIST
 function runme() {
   set -x
-  [[ -n "${REPO}" ]] && cat >/etc/yum.repos.d/local-rpms.repo <<EOF
-[local-rpms]
-name=Local RPMS
-baseurl=file:///tmp/local-rpms
-enabled=1
-gpgcheck=0
-EOF
+#FIXME
+#  [[ -n "${REPO}" ]] && cat >/etc/yum.repos.d/local-rpms.repo <<EOF
+#[local-rpms]
+#name=Local RPMS
+#baseurl=file:///tmp/local-rpms
+#enabled=1
+#gpgcheck=0
+#EOF
   echo "$(getent passwd $USER)" >> /etc/passwd
   echo "$(getent group $(id -g))" >> /etc/group
 
@@ -317,11 +321,11 @@ EOF
   # https://access.redhat.com/solutions/1426113
   runas $USER rpmbuild --define '_topdir /tmp/../tmp/../tmp' --define 'dist .$DIST' $NOCLEAN -ba /tmp/$SPECFILE || EXIT \$?
 
-  # as root, FIXME keep arch ??
-  if [[ -n "${UPDATE}" ]] ; then
-    tar c -C /tmp RPMS SRPMS | tar x -C /tmp/local-repo &&
-      for repo in /tmp/local-repo/RPMS/* /tmp/local-repo/SRPMS ; do createrepo $repo ; done
-  fi
+#FIXME
+#  if [[ -n "${UPDATE}" ]] ; then
+#    tar c -C /tmp RPMS SRPMS | tar x -C /tmp/local-repo &&
+#      for repo in /tmp/local-repo/RPMS/* /tmp/local-repo/SRPMS ; do createrepo $repo ; done
+#  fi
   EXIT 0
 }
 runme
