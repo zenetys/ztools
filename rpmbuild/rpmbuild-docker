@@ -40,6 +40,8 @@ declare CACHEBASE=${CACHEBASE:-/tmp}
 declare DIST=${DIST:-el7}
 #FIXME
 #declare REPO=""
+declare KEEP=
+declare NOKEEP=
 declare SOURCEDIR=${SOURCEDIR}
 declare OUTPUTDIR=${OUTPUTDIR}
 declare PREBUILDSCRIPT=${PREBUILDSCRIPT}
@@ -248,38 +250,40 @@ if [[ ${PREBUILDSCRIPT} ]] ; then
   DOCKER_OPTS+=( --mount type=bind,src=$PREBUILDSCRIPT,dst=/tmp/${PREBUILDSCRIPT##*/} )
 fi
 
-CTNAME="build_${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
-DOCKER_OPTS+=( --name "$CTNAME" -i --rm )
-trap 'docker kill "$CTNAME"; exit;' INT
-IFS=$''
-cat <<__EOF__ |docker run "${DOCKER_OPTS[@]}" "$image" /bin/bash &
-function EXIT() {
-  local status=\${1:-0}
-  [[ -n "$NOKEEP" ]] && exit \$status
-  [[ -n "$KEEP" || \$status != 0 ]] && sleep infinity
-  exit \$status
+BGROUP=$(id -gn)
+BUSER=${USER:-$(id -un)}
+BHOME=~
+
+function build_exit() {
+  local status=${1:-0}
+  [[ -n $NOKEEP ]] && exit "$status"
+  [[ -n $KEEP || $status != 0 ]] && sleep infinity
+  exit "$status"
 }
-function runas() {
-  printf -v qcmd "%q " "\${@:2}"
-  runuser -l "\$1" -c "\$qcmd"
+function build_runas() {
+  printf -v qcmd "%q " "${@:2}"
+  runuser -l "$1" -c "$qcmd"
 }
-function dl() {
-  local curlopts=( -fRL --connect-timeout 15 ) dest=\${2:-\$CACHEDIR} retval
-  if [[ \$1 =~ ^(.+)#?/([^/]+)$ ]]; then
-    [[ -f \$dest/\${BASH_REMATCH[2]} ]] && return 0
-    \${RUNAS:+runas "\$RUNAS" }curl "\${curlopts[@]}" -o "\$dest/\${BASH_REMATCH[2]}" "\$1"
-    retval=\$?
-    REPLY="cURL return code \$retval"
-    return "\$retval"
+function build_dl() {
+  local curlopts=( -fRL --connect-timeout 15 ) dest=${2:-$CACHEDIR} retval
+  if [[ $1 =~ ^(.+)#?/([^/]+)$ ]]; then
+    [[ -f $dest/${BASH_REMATCH[2]} ]] && return 0
+    ${RUNAS:+build_runas "$RUNAS" }curl "${curlopts[@]}" -o "$dest/${BASH_REMATCH[2]}" "$1"
+    retval=$?
+    REPLY="cURL return code $retval"
+    return "$retval"
   else
     REPLY='URL not supported'
     return 1
   fi
 }
-export -f dl runas
-export CACHEDIR=/tmp/cache-shared DIST=$DIST
-function runme() {
-  set -x
+function build_main() {
+  set -fx
+  OIFS=$IFS
+
+  mkdir -p "$BHOME"
+  chown "$BUSER:$BGROUP" "$BHOME"
+
 #FIXME
 #  [[ -n "${REPO}" ]] && cat >/etc/yum.repos.d/local-rpms.repo <<EOF
 #[local-rpms]
@@ -288,43 +292,56 @@ function runme() {
 #enabled=1
 #gpgcheck=0
 #EOF
-  echo "$(getent passwd $USER)" >> /etc/passwd
-  echo "$(getent group $(id -g))" >> /etc/group
-
-  if [[ -n "$PREBUILDSCRIPT" ]] ; then
-    /tmp/${PREBUILDSCRIPT##*/} || EXIT \$?
+  if [[ -n $PREBUILDSCRIPT ]] ; then
+    "$PREBUILDSCRIPT" || build_exit $?
   fi
 
-  buildreq=( \$(rpmspec -P /tmp/$SPECFILE |
+  IFS=$'\n'
+  buildreq=( $(rpmspec -P "/tmp/$SPECFILE" |
     sed -ne 's/^BuildRequires: *//p' |
     sed -re 's/(( +[^ ,]|[^ ,])*),/\1\n/g' |
     sed -re 's/^ *([^ ]( +[^ ]|[^ ])*) *$/\1/') )
-  if [[ -n \$buildreq ]]; then
-    yum install -y "\${buildreq[@]}" || EXIT \$?
+  IFS=$OIFS
+  if [[ -n $buildreq ]]; then
+    yum install -y "${buildreq[@]}" || build_exit $?
   fi
-
-  # create user home for spectool
-  mkdir -p $HOME/rpmbuild && chown -R $USER:$(id -g) $HOME
 
   # download sources if needed
   if [[ $DOWNLOAD == 1 ]] ; then
-    dlsources=( \$(rpmspec -P /tmp/$SPECFILE |
+    dlsources=( $(rpmspec -P "/tmp/$SPECFILE" |
       sed -nr -e 's,^(source|patch)[0-9]*\s*:\s*(\S+).*,\2,i;T;/:\/\//p') )
-    for i in "\${dlsources[@]}"; do RUNAS=$USER dl "\$i" /tmp/SOURCES || EXIT \$?; done
+    for i in "${dlsources[@]}"; do RUNAS="$BUSER" build_dl "$i" /tmp/SOURCES || build_exit $?; done
   fi
 
-  # as user
   # Having _topdir /tmp causes problems in el6/el7 because it is not long enough
   # https://access.redhat.com/solutions/1426113
-  runas $USER rpmbuild --define '_topdir /tmp/../tmp/../tmp' --define 'dist .$DIST' $NOCLEAN -ba /tmp/$SPECFILE || EXIT \$?
+  build_runas "$BUSER" rpmbuild --define '_topdir /tmp/../tmp/../tmp' \
+    --define "dist .$DIST" ${NOCLEAN:+"$NOCLEAN"} -ba "/tmp/$SPECFILE" ||
+      build_exit $?
 
 #FIXME
 #  if [[ -n "${UPDATE}" ]] ; then
 #    tar c -C /tmp RPMS SRPMS | tar x -C /tmp/local-repo &&
 #      for repo in /tmp/local-repo/RPMS/* /tmp/local-repo/SRPMS ; do createrepo $repo ; done
 #  fi
-  EXIT 0
+  build_exit 0
 }
-runme
+
+CTNAME="build_${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
+DOCKER_OPTS+=( --name "$CTNAME" -i --rm )
+trap 'docker kill "$CTNAME"; exit;' INT
+cat <<__EOF__ |docker run "${DOCKER_OPTS[@]}" "$image" /bin/bash &
+$(declare -p BGROUP BHOME BUSER DIST DOWNLOAD KEEP ${NOCLEAN:+NOCLEAN} NOKEEP SPECFILE)
+$([[ -n $PREBUILDSCRIPT ]] && echo PREBUILDSCRIPT=/tmp/${PREBUILDSCRIPT##*/})
+$(declare -f build_exit)
+$(declare -f build_runas)
+$(declare -f build_dl)
+$(declare -f build_main)
+echo "$(getent group "$BGROUP")" >> /etc/group
+echo "$(getent passwd "$BUSER")" >> /etc/passwd
+# exports for prebuild script
+export -f build_dl build_runas
+export CACHEDIR=/tmp/cache-shared DIST
+build_main
 __EOF__
 wait "$!"
