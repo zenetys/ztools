@@ -46,6 +46,7 @@ declare SOURCEDIR=${SOURCEDIR}
 declare OUTPUTDIR=${OUTPUTDIR}
 declare PREBUILDSCRIPT=${PREBUILDSCRIPT}
 declare DOWNLOAD=1
+declare RPMBUILDOPTS=()
 
 if [[ -n $VERBOSE ]] ; then
   ( IFS='' ; echo "[DEBUG] '${0}${*/#/' '}'" )
@@ -219,7 +220,7 @@ fi
 echo "Docker image: $image"
 
 # need rpmbuild --noclean option to keep generated files in place
-(( ${DIST#el} >= 7 )) && NOCLEAN=--noclean
+(( ${DIST#el} >= 7 )) && RPMBUILDOPTS+=( --noclean )
 
 # Options for docker
 DOCKER_OPTS=(
@@ -318,7 +319,7 @@ function build_main() {
   # Having _topdir /tmp causes problems in el6/el7 because it is not long enough
   # https://access.redhat.com/solutions/1426113
   build_runas "$BUSER" rpmbuild --define '_topdir /tmp/../tmp/../tmp' \
-    --define "dist .$DIST" ${NOCLEAN:+"$NOCLEAN"} -ba "/tmp/$SPECFILE" ||
+    --define "dist .$DIST" "${RPMBUILDOPTS[@]}" -ba "/tmp/$SPECFILE" ||
       build_exit $?
 
 #FIXME
@@ -333,7 +334,7 @@ CTNAME="build_${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
 DOCKER_OPTS+=( --name "$CTNAME" -i --rm )
 trap 'docker kill "$CTNAME"; exit;' INT
 cat <<__EOF__ |docker run "${DOCKER_OPTS[@]}" "$image" /bin/bash &
-$(declare -p BGROUP BHOME BUSER DIST DOWNLOAD KEEP ${NOCLEAN:+NOCLEAN} NOKEEP SPECFILE)
+$(declare -p BGROUP BHOME BUSER DIST DOWNLOAD KEEP NOKEEP RPMBUILDOPTS SPECFILE)
 $([[ -n $PREBUILDSCRIPT ]] && echo PREBUILDSCRIPT=/tmp/${PREBUILDSCRIPT##*/})
 $(declare -f build_exit)
 $(declare -f build_runas)
