@@ -235,7 +235,7 @@ DOCKER_OPTS=(
 
 # Create local cache
 [[ -d $CACHEBASE/cache-yum-$DIST ]] || mkdir -p $CACHEBASE/cache-yum-$DIST
-[[ -d $CACHEBASE/cache-shared ]] || mkdir -p /tmp/cache-shared
+[[ -d $CACHEBASE/cache-shared ]] || mkdir -p $CACHEBASE/cache-shared
 [[ -d $OUTPUTDIR/SRPMS ]] & mkdir -p $OUTPUTDIR/SRPMS
 [[ -d $OUTPUTDIR/RPMS ]] & mkdir -p $OUTPUTDIR/RPMS
 
