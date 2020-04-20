@@ -310,7 +310,9 @@ function build_main() {
   if [[ $DOWNLOAD == 1 ]] ; then
     dlsources=( $(rpmspec -P "/tmp/$SPECFILE" |
       sed -nr -e 's,^(source|patch)[0-9]*\s*:\s*(\S+).*,\2,i;T;/:\/\//p') )
-    for i in "${dlsources[@]}"; do RUNAS="$BUSER" build_dl "$i" /tmp/SOURCES || build_exit $?; done
+    for i in "${dlsources[@]}"; do
+        RUNAS="$BUSER" build_dl "$i" /tmp/SOURCES || build_exit $?
+    done
   fi
 
   # Having _topdir /tmp causes problems in el6/el7 because it is not long enough
