@@ -121,12 +121,16 @@ if [[ -z $SOURCEDIR && -d ${SPECDIR%/*}/SOURCES ]] ; then
   SOURCEDIR=${SPECDIR%/*}/SOURCES
 fi
 
-# find prebuild script
-if [[ -z $PREBUILDSCRIPT && -x $SPECDIR/prebuild.sh ]]; then
-  PREBUILDSCRIPT=$SPECDIR/prebuild.sh
-fi
-if [[ -z $PREBUILDSCRIPT && -x ${SPECDIR%/*}/prebuild.sh ]]; then
-  PREBUILDSCRIPT=${SPECDIR%/*}/prebuild.sh
+if [[ -z $PREBUILDSCRIPT ]]; then
+  # auto locate prebuild script if not given
+  if [[ -x $SPECDIR/prebuild.sh ]]; then
+    PREBUILDSCRIPT=$SPECDIR/prebuild.sh
+  elif [[ -x ${SPECDIR%/*}/prebuild.sh ]]; then
+    PREBUILDSCRIPT=${SPECDIR%/*}/prebuild.sh
+  fi
+elif [[ ! -x $PREBUILDSCRIPT ]]; then
+  echo "FATAL: cannot execute prebuild script: $PREBUILDSCRIPT" >&2
+  exit 1
 fi
 
 [[ -z $SOURCEDIR ]] && SOURCEDIR=$PWD
