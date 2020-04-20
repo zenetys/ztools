@@ -230,6 +230,14 @@ fi
 
 echo "Docker image: $image"
 
+# Create missing directories
+for i in "$CACHEBASE"/cache-{yum-"$DIST",shared} "$OUTPUTDIR"/{RPMS,SRPMS}; do
+  if [[ ! -d $i ]] && ! mkdir -p "$i"; then
+    echo "FATAL: cannot create directory: $i" >&2
+    exit 1
+  fi
+done
+
 # need rpmbuild --noclean option to keep generated files in place
 (( ${DIST#el} >= 7 )) && RPMBUILDOPTS+=( --noclean )
 
@@ -244,12 +252,6 @@ DOCKER_OPTS=(
   --mount type=bind,src=$OUTPUTDIR/SRPMS,dst=/tmp/SRPMS
   --mount type=bind,src=$OUTPUTDIR/RPMS,dst=/tmp/RPMS
 )
-
-# Create local cache
-[[ -d $CACHEBASE/cache-yum-$DIST ]] || mkdir -p $CACHEBASE/cache-yum-$DIST
-[[ -d $CACHEBASE/cache-shared ]] || mkdir -p $CACHEBASE/cache-shared
-[[ -d $OUTPUTDIR/SRPMS ]] && mkdir -p $OUTPUTDIR/SRPMS
-[[ -d $OUTPUTDIR/RPMS ]] && mkdir -p $OUTPUTDIR/RPMS
 
 #FIXME
 ## Local repository
