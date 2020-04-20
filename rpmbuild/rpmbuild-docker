@@ -125,12 +125,19 @@ if [[ -z $PREBUILDSCRIPT ]]; then
   # auto locate prebuild script if not given
   if [[ -x $SPECDIR/prebuild.sh ]]; then
     PREBUILDSCRIPT=$SPECDIR/prebuild.sh
+    PREBUILDSCRIPTFILE=prebuild.sh
   elif [[ -x ${SPECDIR%/*}/prebuild.sh ]]; then
     PREBUILDSCRIPT=${SPECDIR%/*}/prebuild.sh
+    PREBUILDSCRIPTFILE=prebuild.sh
+  else
+    PREBUILDSCRIPTFILE=
   fi
-elif [[ ! -x $PREBUILDSCRIPT ]]; then
-  echo "FATAL: cannot execute prebuild script: $PREBUILDSCRIPT" >&2
-  exit 1
+else
+  if [[ ! -x $PREBUILDSCRIPT ]]; then
+    echo "FATAL: cannot execute prebuild script: $PREBUILDSCRIPT" >&2
+    exit 1
+  fi
+  PREBUILDSCRIPTFILE=${PREBUILDSCRIPT##*/}
 fi
 
 [[ -z $SOURCEDIR ]] && SOURCEDIR=$PWD
@@ -252,7 +259,7 @@ DOCKER_OPTS=(
 
 # Prebuild script
 if [[ -n $PREBUILDSCRIPT ]] ; then
-  DOCKER_OPTS+=( --mount type=bind,src=$PREBUILDSCRIPT,dst=/tmp/${PREBUILDSCRIPT##*/} )
+  DOCKER_OPTS+=( --mount type=bind,src=$PREBUILDSCRIPT,dst=/tmp/$PREBUILDSCRIPTFILE )
 fi
 
 BGROUP=$(id -gn)
@@ -297,8 +304,8 @@ function build_main() {
 #enabled=1
 #gpgcheck=0
 #EOF
-  if [[ -n $PREBUILDSCRIPT ]] ; then
-    "$PREBUILDSCRIPT" || build_exit $?
+  if [[ -n $PREBUILDSCRIPTFILE ]] ; then
+    "/tmp/$PREBUILDSCRIPTFILE" || build_exit $?
   fi
 
   IFS=$'\n'
@@ -338,8 +345,7 @@ CTNAME="build_${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
 DOCKER_OPTS+=( --name "$CTNAME" -i --rm )
 trap 'docker kill "$CTNAME"; exit;' INT
 cat <<__EOF__ |docker run "${DOCKER_OPTS[@]}" "$image" /bin/bash &
-$(declare -p BGROUP BHOME BUSER DIST DOWNLOAD KEEP NOKEEP RPMBUILDOPTS SPECFILE)
-$([[ -n $PREBUILDSCRIPT ]] && echo PREBUILDSCRIPT=/tmp/${PREBUILDSCRIPT##*/})
+$(declare -p BGROUP BHOME BUSER DIST DOWNLOAD KEEP NOKEEP PREBUILDSCRIPTFILE RPMBUILDOPTS SPECFILE)
 $(declare -f build_exit)
 $(declare -f build_runas)
 $(declare -f build_dl)
