@@ -47,7 +47,7 @@ declare OUTPUTDIR=${OUTPUTDIR}
 declare PREBUILDSCRIPT=${PREBUILDSCRIPT}
 declare DOWNLOAD=1
 
-if [[ $VERBOSE ]] ; then
+if [[ -n $VERBOSE ]] ; then
   ( IFS='' ; echo "[DEBUG] '${0}${*/#/' '}'" )
 fi
 
@@ -241,12 +241,12 @@ DOCKER_OPTS=(
 
 #FIXME
 ## Local repository
-#if [[ ${REPO} ]] ; then
+#if [[ -n $REPO ]] ; then
 #  DOCKER_OPTS+=( --mount type=bind,src=$REPO,dst=/tmp/local-rpms )
 #fi
 
 # Prebuild script
-if [[ ${PREBUILDSCRIPT} ]] ; then
+if [[ -n $PREBUILDSCRIPT ]] ; then
   DOCKER_OPTS+=( --mount type=bind,src=$PREBUILDSCRIPT,dst=/tmp/${PREBUILDSCRIPT##*/} )
 fi
 
