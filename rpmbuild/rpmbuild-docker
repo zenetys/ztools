@@ -10,7 +10,7 @@ function usage() {
   local IFS=$'\t'
   exec >&2
   if [[ $0 == "-bash" ]] ; then return 1 ; fi
-  [[ $# -gt 0 ]] && echo "ERROR: $*"
+  (( $# > 0 )) && echo "ERROR: $*"
   version
   echo "Usage: ${0##*/} [options...] specfile|specdir"
   echo "Options:"
@@ -31,20 +31,20 @@ function version() {
   echo "${PROGFILE##*/} $VERSION - $AUTHOR - $LICENSE"
 }
 
-declare QUIET=${QUIET}
-declare VERBOSE=${VERBOSE}
-declare XDEBUG=${XDEBUG}
-declare ARGS=( )
+declare QUIET=$QUIET
+declare VERBOSE=$VERBOSE
+declare XDEBUG=$XDEBUG
+declare ARGS=()
 
 declare CACHEBASE=${CACHEBASE:-/tmp}
 declare DIST=${DIST:-el7}
 #FIXME
-#declare REPO=""
+#declare REPO=
 declare KEEP=
 declare NOKEEP=
-declare SOURCEDIR=${SOURCEDIR}
-declare OUTPUTDIR=${OUTPUTDIR}
-declare PREBUILDSCRIPT=${PREBUILDSCRIPT}
+declare SOURCEDIR=$SOURCEDIR
+declare OUTPUTDIR=$OUTPUTDIR
+declare PREBUILDSCRIPT=$PREBUILDSCRIPT
 declare DOWNLOAD=1
 declare RPMBUILDOPTS=()
 
@@ -102,9 +102,9 @@ fi
 
 if [[ -d $SPECFILE ]] ; then
   if [[ -d $SPECFILE/SPECS ]] ; then
-    SPECFILE=( ${SPECFILE}/SPECS/*.spec )
+    SPECFILE=( $SPECFILE/SPECS/*.spec )
   else
-    SPECFILE=( ${SPECFILE}/*.spec )
+    SPECFILE=( $SPECFILE/*.spec )
   fi
 
   if [[ ${#SPECFILE[@]} != 1 ]]; then
@@ -282,7 +282,8 @@ function build_dl() {
   local curlopts=( -fRL --connect-timeout 15 ) dest=${2:-$CACHEDIR} retval
   if [[ $1 =~ ^(.+)#?/([^/]+)$ ]]; then
     [[ -f $dest/${BASH_REMATCH[2]} ]] && return 0
-    ${RUNAS:+build_runas "$RUNAS" }curl "${curlopts[@]}" -o "$dest/${BASH_REMATCH[2]}" "$1"
+    ${RUNAS:+build_runas "$RUNAS" }\
+      curl "${curlopts[@]}" -o "$dest/${BASH_REMATCH[2]}" "$1"
     retval=$?
     REPLY="cURL return code $retval"
     return "$retval"
