@@ -238,7 +238,7 @@ for i in "$CACHEBASE"/cache-{yum-"$DIST",shared} "$OUTPUTDIR"/{RPMS,SRPMS}; do
   fi
 done
 
-# need rpmbuild --noclean option to keep generated files in place
+# Need rpmbuild --noclean option to keep generated files in place
 (( ${DIST#el} >= 7 )) && RPMBUILDOPTS+=( --noclean )
 
 # Options for docker
@@ -254,16 +254,15 @@ DOCKER_OPTS=(
 )
 
 #FIXME
-## Local repository
 #if [[ -n $REPO ]] ; then
 #  DOCKER_OPTS+=( --mount type=bind,src=$REPO,dst=/tmp/local-rpms )
 #fi
 
-# Prebuild script
 if [[ -n $PREBUILDSCRIPT ]] ; then
   DOCKER_OPTS+=( --mount type=bind,src=$PREBUILDSCRIPT,dst=/tmp/$PREBUILDSCRIPTFILE )
 fi
 
+# Prepare env and script to be run inside the container
 BGROUP=$(id -gn)
 BUSER=${USER:-$(id -un)}
 BHOME=~
@@ -344,6 +343,7 @@ function build_main() {
   build_exit 0
 }
 
+# Build RPM in the container
 CTNAME="build_${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
 DOCKER_OPTS+=( --name "$CTNAME" -i --rm )
 trap 'docker kill "$CTNAME"; exit;' INT
