@@ -244,22 +244,22 @@ done
 # Options for docker
 DOCKER_OPTS=(
   --tmpfs /tmp:rw,exec
-  --mount type=bind,src=$SPECDIR/$SPECFILE,dst=/tmp/$SPECFILE
-  --mount type=bind,src=$CACHEBASE/cache-yum-$DIST,dst=/var/cache/yum
-  --mount type=bind,src=$CACHEBASE/cache-yum-$DIST,dst=/var/cache/dnf
-  --mount type=bind,src=$CACHEBASE/cache-shared,dst=/tmp/cache-shared
-  --mount type=bind,src=$SOURCEDIR,dst=/tmp/SOURCES
-  --mount type=bind,src=$OUTPUTDIR/SRPMS,dst=/tmp/SRPMS
-  --mount type=bind,src=$OUTPUTDIR/RPMS,dst=/tmp/RPMS
+  --mount "type=bind,src=$SPECDIR/$SPECFILE,dst=/tmp/$SPECFILE"
+  --mount "type=bind,src=$CACHEBASE/cache-yum-$DIST,dst=/var/cache/yum"
+  --mount "type=bind,src=$CACHEBASE/cache-yum-$DIST,dst=/var/cache/dnf"
+  --mount "type=bind,src=$CACHEBASE/cache-shared,dst=/tmp/cache-shared"
+  --mount "type=bind,src=$SOURCEDIR,dst=/tmp/SOURCES"
+  --mount "type=bind,src=$OUTPUTDIR/SRPMS,dst=/tmp/SRPMS"
+  --mount "type=bind,src=$OUTPUTDIR/RPMS,dst=/tmp/RPMS"
 )
 
 #FIXME
 #if [[ -n $REPO ]] ; then
-#  DOCKER_OPTS+=( --mount type=bind,src=$REPO,dst=/tmp/local-rpms )
+#  DOCKER_OPTS+=( --mount "type=bind,src=$REPO,dst=/tmp/local-rpms" )
 #fi
 
 if [[ -n $PREBUILDSCRIPT ]] ; then
-  DOCKER_OPTS+=( --mount type=bind,src=$PREBUILDSCRIPT,dst=/tmp/$PREBUILDSCRIPTFILE )
+  DOCKER_OPTS+=( --mount "type=bind,src=$PREBUILDSCRIPT,dst=/tmp/$PREBUILDSCRIPTFILE" )
 fi
 
 # Prepare env and script to be run inside the container
