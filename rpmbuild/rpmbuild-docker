@@ -38,8 +38,8 @@ declare ARGS=()
 
 declare CACHEBASE=${CACHEBASE:-/tmp}
 declare DIST=
-#FIXME
-#declare REPO=
+declare REPO=$REPO
+declare UPDATE=
 declare KEEP=
 declare NOKEEP=
 declare SOURCEDIR=$SOURCEDIR
@@ -72,11 +72,10 @@ while (( $# > 0 )); do
     -O|--outputdir) OUTPUTDIR=${2%/} ; shift ;;
     ## --no-download: skip downloading sources if needed
     --no-download) DOWNLOAD=0 ; shift ;;
-#FIXME
-#    ## --repo PATH: local repository
-#    --repo) REPO=$2 ; shift ;;
-#    ## --update: update repository with new packages
-#    --update) UPDATE=1 ;;
+    ## --repo PATH: local repository
+    --repo) REPO=$2 ; shift ;;
+    ## --update: update repository with new packages
+    --update) UPDATE=1 ;;
     ## --keep: keep build environment after build_ldflags
     --keep) KEEP=1 ;;
     ## --nokeep: never keep build environment on error
@@ -146,12 +145,14 @@ fi
 [[ -z $OUTPUTDIR ]] && OUTPUTDIR=$PWD
 [[ ${SOURCEDIR:0:1} != "/" ]] && SOURCEDIR=$PWD/$SOURCEDIR
 [[ ${OUTPUTDIR:0:1} != "/" ]] && OUTPUTDIR=$PWD/$OUTPUTDIR
+[[ -n $REPO && ${REPO:0:1} != "/" ]] && REPO=$PWD/$REPO
 
 echo "SPECFILE: $SPECFILE"
 echo "SPECDIR: $SPECDIR"
 echo "SOURCEDIR: $SOURCEDIR"
 echo "OUTPUTDIR: $OUTPUTDIR"
 echo "PREBUILDSCRIPT: ${PREBUILDSCRIPT:-none}"
+echo "REPO: ${REPO:-none}"
 
 function dockerfile_for_dist_el6() {
   cat <<'EOF'
@@ -253,7 +254,9 @@ echo "DIST_VERSION: $DIST_VERSION"
 echo "IMAGE: $IMAGE"
 
 # Create missing directories
-for i in "$CACHEBASE"/cache-{yum-"$DIST",shared} "$OUTPUTDIR"/{RPMS,SRPMS}; do
+for i in "$CACHEBASE"/cache-{yum-"$DIST",shared} \
+         "$OUTPUTDIR"/{RPMS,SRPMS} \
+         ${REPO:+"$REPO"}; do
   if [[ ! -d $i ]] && ! mkdir -p "$i"; then
     echo "FATAL: cannot create directory: $i" >&2
     exit 1
@@ -279,10 +282,9 @@ DOCKER_OPTS=(
   --mount "type=bind,src=$OUTPUTDIR/RPMS,dst=/tmp/RPMS"
 )
 
-#FIXME
-#if [[ -n $REPO ]] ; then
-#  DOCKER_OPTS+=( --mount "type=bind,src=$REPO,dst=/tmp/local-rpms" )
-#fi
+if [[ -n $REPO ]] ; then
+  DOCKER_OPTS+=( --mount "type=bind,src=$REPO,dst=/tmp/local-repo" )
+fi
 
 if [[ -n $PREBUILDSCRIPT ]] ; then
   DOCKER_OPTS+=( --mount "type=bind,src=$PREBUILDSCRIPT,dst=/tmp/$PREBUILDSCRIPTFILE" )
@@ -324,14 +326,20 @@ function build_main() {
   mkdir -p "$BHOME"
   chown "$BUSER:$BGROUP" "$BHOME"
 
-#FIXME
-#  [[ -n "${REPO}" ]] && cat >/etc/yum.repos.d/local-rpms.repo <<EOF
-#[local-rpms]
-#name=Local RPMS
-#baseurl=file:///tmp/local-rpms
-#enabled=1
-#gpgcheck=0
-#EOF
+  if [[ -n "$REPO" ]]; then
+    cat >/etc/yum.repos.d/local-repo.repo <<'EOF'
+[local-repo]
+name=local-repo
+baseurl=file:///tmp/local-repo/RPMS
+enabled=1
+gpgcheck=0
+EOF
+    if [[ ! -d /tmp/local-repo/RPMS/repodata ]]; then
+      build_runas "$BUSER" mkdir -p /tmp/local-repo/RPMS
+      build_runas "$BUSER" createrepo /tmp/local-repo/RPMS
+    fi
+  fi
+
   if [[ -n $PREBUILDSCRIPTFILE ]] ; then
     "/tmp/$PREBUILDSCRIPTFILE" || build_exit $?
   fi
@@ -361,11 +369,12 @@ function build_main() {
     --define "dist .$DIST" "${RPMBUILDOPTS[@]}" -ba "/tmp/$SPECFILE" ||
       build_exit $?
 
-#FIXME
-#  if [[ -n "${UPDATE}" ]] ; then
-#    tar c -C /tmp RPMS SRPMS | tar x -C /tmp/local-repo &&
-#      for repo in /tmp/local-repo/RPMS/* /tmp/local-repo/SRPMS ; do createrepo $repo ; done
-#  fi
+  if [[ -n $REPO && -n $UPDATE ]] ; then
+    for repo in RPMS SRPMS; do
+      build_runas "$BUSER" cp -aT "/tmp/$repo/" "/tmp/local-repo/$repo/"
+      build_runas "$BUSER" createrepo --update "/tmp/local-repo/$repo"
+    done
+  fi
   build_exit 0
 }
 
@@ -374,7 +383,7 @@ CTNAME="build_${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
 DOCKER_OPTS+=( --name "$CTNAME" -i --rm )
 trap 'docker kill "$CTNAME"; exit;' INT
 cat <<__EOF__ |docker run "${DOCKER_OPTS[@]}" "$IMAGE" /bin/bash &
-$(declare -p BGROUP BHOME BUSER DIST DIST_TYPE DIST_VERSION DOWNLOAD KEEP NOKEEP PREBUILDSCRIPTFILE RPMBUILDOPTS SPECFILE)
+$(declare -p BGROUP BHOME BUSER DIST DIST_TYPE DIST_VERSION DOWNLOAD KEEP NOKEEP PREBUILDSCRIPTFILE REPO RPMBUILDOPTS SPECFILE UPDATE)
 $(declare -f build_exit)
 $(declare -f build_runas)
 $(declare -f build_dl)
