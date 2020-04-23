@@ -147,11 +147,11 @@ fi
 [[ ${SOURCEDIR:0:1} != "/" ]] && SOURCEDIR=$PWD/$SOURCEDIR
 [[ ${OUTPUTDIR:0:1} != "/" ]] && OUTPUTDIR=$PWD/$OUTPUTDIR
 
-# echo "SPECFILE: $SPECFILE"
-# echo "SPECDIR: $SPECDIR"
-# echo "SOURCEDIR: $SOURCEDIR"
-# echo "OUTPUTDIR: $OUTPUTDIR"
-# echo "PREBUILDSCRIPT: $PREBUILDSCRIPT"
+echo "SPECFILE: $SPECFILE"
+echo "SPECDIR: $SPECDIR"
+echo "SOURCEDIR: $SOURCEDIR"
+echo "OUTPUTDIR: $OUTPUTDIR"
+echo "PREBUILDSCRIPT: ${PREBUILDSCRIPT:-none}"
 
 function dockerfile_for_dist_el6() {
   cat <<'EOF'
@@ -247,7 +247,10 @@ fi
 DIST_VERSION=${DIST##*[!0-9]}
 DIST_TYPE=${DIST%$DIST_VERSION}
 
-echo "Docker image: $IMAGE"
+echo "DIST: $DIST"
+echo "DIST_TYPE: $DIST_TYPE"
+echo "DIST_VERSION: $DIST_VERSION"
+echo "IMAGE: $IMAGE"
 
 # Create missing directories
 for i in "$CACHEBASE"/cache-{yum-"$DIST",shared} "$OUTPUTDIR"/{RPMS,SRPMS}; do
