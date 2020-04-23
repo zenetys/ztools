@@ -37,7 +37,7 @@ declare XDEBUG=$XDEBUG
 declare ARGS=()
 
 declare CACHEBASE=${CACHEBASE:-/tmp}
-declare DIST=${DIST:-el7}
+declare DIST=
 #FIXME
 #declare REPO=
 declare KEEP=
@@ -62,8 +62,10 @@ while (( $# > 0 )); do
     --x-debug)    XDEBUG=1 ;;
     ## -v, --verbose: Define verbose level (must be repeat)
     -v|--verbose) ((VERBOSE++)) ;;
-    ## -d, --dist DIST: Define RHEL dist version (el6,el7,el8)
+    ## -d, --dist DIST: Define dist version (eg: el8)
     -d|--dist) DIST=$2 ; shift ;;
+    ## -I, --image IMAGE: Build using a specific docker image
+    -I|--image) IMAGE=$2 ; shift ;;
     ## -s, --source PATH: define source directory
     -s|--sourcedir) SOURCEDIR=${2%/} ; shift ;;
     ## -O, --outputdir PATH: define output directory for generated packages 
@@ -214,21 +216,38 @@ function dockerfile_for_dist() {
   fi
 }
 
-if ! image_src=$(dockerfile_for_dist); then
-  echo "FATAL: no source to build a docker base image for $DIST" >&2
-  exit 1
+if [[ -z $IMAGE ]]; then
+  if [[ -z $DIST ]]; then
+    echo "FATAL: require -d DIST or -I IMAGE (or both)" >&2
+    exit 1
+  fi
+  # Set $IMAGE from $DIST
+  if ! image_src=$(dockerfile_for_dist); then
+    echo "FATAL: no image source for $DIST" >&2
+    exit 1
+  fi
+  image_sig=$(echo "$image_src" |md5sum |sed -re 's,^(.{7}).*,\1,')
+  IMAGE="rpmbuild/$DIST:$image_sig"
+  # Build docker image
+  if ! docker images -q "$IMAGE" |grep -q . &&
+     ! echo "$image_src" |docker build -t "$IMAGE" -; then
+    echo "FATAL: failed to build image $IMAGE for $DIST" >&2
+    exit 1
+  fi
+elif [[ -z $DIST ]]; then
+  # Set $DIST from $IMAGE
+  DIST=$(docker run --rm "$IMAGE" rpm -E '%{dist}' |sed 's,^\.\+,,')
+  if [[ -z $DIST ]]; then
+    echo "FATAL: failed to identify dist in image $IMAGE" >&2
+    exit 1
+  fi
 fi
-image_sig=$(echo "$image_src" |md5sum |sed -re 's,^(.{7}).*,\1,')
-image="rpmbuild/$DIST:$image_sig"
 
-# auto build docker images for rpmbuild
-if ! docker images -q "$image" |grep -q . &&
-   ! echo "$image_src" |docker build -t "$image" -; then
-  echo "FATAL: failed to build docker base image $image" >&2
-  exit 1
-fi
+# Extract type and version from $DIST for convenience
+DIST_VERSION=${DIST##*[!0-9]}
+DIST_TYPE=${DIST%$DIST_VERSION}
 
-echo "Docker image: $image"
+echo "Docker image: $IMAGE"
 
 # Create missing directories
 for i in "$CACHEBASE"/cache-{yum-"$DIST",shared} "$OUTPUTDIR"/{RPMS,SRPMS}; do
@@ -239,7 +258,11 @@ for i in "$CACHEBASE"/cache-{yum-"$DIST",shared} "$OUTPUTDIR"/{RPMS,SRPMS}; do
 done
 
 # Need rpmbuild --noclean option to keep generated files in place
-(( ${DIST#el} >= 7 )) && RPMBUILDOPTS+=( --noclean )
+if [[ $DIST_TYPE == el && $DIST_VERSION -ge 7 ]] ||
+   docker run --rm "$IMAGE" rpm --noclean >/dev/null 2>&1
+then
+  RPMBUILDOPTS+=( --noclean )
+fi
 
 # Options for docker
 DOCKER_OPTS=(
@@ -347,8 +370,8 @@ function build_main() {
 CTNAME="build_${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
 DOCKER_OPTS+=( --name "$CTNAME" -i --rm )
 trap 'docker kill "$CTNAME"; exit;' INT
-cat <<__EOF__ |docker run "${DOCKER_OPTS[@]}" "$image" /bin/bash &
-$(declare -p BGROUP BHOME BUSER DIST DOWNLOAD KEEP NOKEEP PREBUILDSCRIPTFILE RPMBUILDOPTS SPECFILE)
+cat <<__EOF__ |docker run "${DOCKER_OPTS[@]}" "$IMAGE" /bin/bash &
+$(declare -p BGROUP BHOME BUSER DIST DIST_TYPE DIST_VERSION DOWNLOAD KEEP NOKEEP PREBUILDSCRIPTFILE RPMBUILDOPTS SPECFILE)
 $(declare -f build_exit)
 $(declare -f build_runas)
 $(declare -f build_dl)
@@ -357,7 +380,7 @@ echo "$(getent group "$BGROUP")" >> /etc/group
 echo "$(getent passwd "$BUSER")" >> /etc/passwd
 # exports for prebuild script
 export -f build_dl build_runas
-export CACHEDIR=/tmp/cache-shared DIST
+export CACHEDIR=/tmp/cache-shared DIST DIST_TYPE DIST_VERSION
 build_main
 __EOF__
 wait "$!"
