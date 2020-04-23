@@ -196,13 +196,21 @@ function dockerfile_for_dist() {
   fi
 }
 
-image="rpmbuild/$DIST:$(dockerfile_for_dist |md5sum |sed -re 's,^(.{7}).*,\1,')"
-echo "Docker image: $image"
+if ! image_src=$(dockerfile_for_dist); then
+  echo "FATAL: no source to build a docker base image for $DIST" >&2
+  exit 1
+fi
+image_sig=$(echo "$image_src" |md5sum |sed -re 's,^(.{7}).*,\1,')
+image="rpmbuild/$DIST:$image_sig"
 
 # auto build docker images for rpmbuild
-if ! docker images -q "$image" | grep -q . ; then
-  dockerfile_for_dist |docker build -t "$image" - || exit $?
+if ! docker images -q "$image" |grep -q . &&
+   ! echo "$image_src" |docker build -t "$image" -; then
+  echo "FATAL: failed to build docker base image $image" >&2
+  exit 1
 fi
+
+echo "Docker image: $image"
 
 # need rpmbuild --noclean option to keep generated files in place
 (( ${DIST#el} >= 7 )) && NOCLEAN=--noclean
