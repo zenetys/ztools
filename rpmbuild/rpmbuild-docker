@@ -3,7 +3,6 @@
 # License: MIT
 # Author: Benoit DOLEZ <bdolez@zenetys.com>
 # Copyright: 2019
-# Version: 1.0
 #
 
 function usage() {
