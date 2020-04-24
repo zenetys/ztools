@@ -305,11 +305,12 @@ function build_runas() {
   runuser -l "$1" -c "$qcmd"
 }
 function build_dl() {
-  local curlopts=( -fRL --connect-timeout 15 ) dest=${2:-$CACHEDIR} retval
-  if [[ $1 =~ ^(.+)#?/([^/]+)$ ]]; then
-    [[ -f $dest/${BASH_REMATCH[2]} ]] && return 0
+  local curlopts=( -fRL --connect-timeout 15 ) url=$1 dest=${2:-$CACHEDIR} retval
+  if [[ $url =~ ^([^#]+)(#?)/([^/]+)$ ]]; then
+    [[ -f $dest/${BASH_REMATCH[3]} ]] && return 0
+    [[ ${BASH_REMATCH[2]} == '#' ]] && url=${BASH_REMATCH[1]}
     ${RUNAS:+build_runas "$RUNAS" }\
-      curl "${curlopts[@]}" -o "$dest/${BASH_REMATCH[2]}" "$1"
+      curl "${curlopts[@]}" -o "$dest/${BASH_REMATCH[3]}" "$url"
     retval=$?
     REPLY="cURL return code $retval"
     return "$retval"
