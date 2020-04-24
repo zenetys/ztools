@@ -313,9 +313,6 @@ function runme() {
     for i in "\${dlsources[@]}"; do RUNAS=$USER dl "\$i" /tmp/SOURCES || EXIT \$?; done
   fi
 
-  # as root
-  ( cd /tmp/SOURCES ; md5sum * )
-
   # as user
   # Having _topdir /tmp causes problems in el6/el7 because it is not long enough
   # https://access.redhat.com/solutions/1426113
