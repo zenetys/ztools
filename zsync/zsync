@@ -194,6 +194,7 @@ argv=( "$@" )
 
 while (( $# > 0 )); do
     case "$1" in
+        --x-debug) XDEBUG=1 ;;
         -c|--config) CONFIG=$2; shift ;;
         -f|--force) DRY_RUN= ;;
         -R|--become-root) BECOMEROOT=1 ;;
@@ -209,6 +210,8 @@ while (( $# > 0 )); do
 done
 
 includes+=( "$@" )
+
+[[ -n $XDEBUG ]] && set -x
 
 trap on_exit EXIT
 
