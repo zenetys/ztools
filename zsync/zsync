@@ -1,12 +1,5 @@
 #!/bin/bash
 
-# This script is ment to be run as root.
-if [[ "$UID" != "0" ]]; then
-    sudo_opts=( -u root )
-    [[ -t 0 ]] || sudo_opts=( -n )
-    exec sudo -u root "${sudo_opts[@]}" -- "$0" "$@"
-fi
-
 export LC_ALL=C
 shopt -s nullglob
 set -o pipefail
@@ -16,16 +9,17 @@ PROGNAME=${0##*/}
 HOSTNAME=$(< /proc/sys/kernel/hostname)
 HOSTNAME=${HOSTNAME%%.*}
 DRY_RUN=1
+BECOMEROOT=0
 LOCK_FILE="/dev/shm/$PROGNAME.lock"
 LOCK_TAKEN=
 
-CONFIG=/etc/zenetys/zsync.cfg
+CONFIG=${ZSYNC_CONFIG:-$HOME/.zsync.cfg}
+[[ -r $CONFIG ]] || CONFIG=/etc/ztools/zsync.cfg
 TIMEOUT=10
-SSH_USER=zsync
-SSH_IDENTITY=~zsync/.ssh/id_rsa
 PEERS=()
 INCLUDES=()
 EXCLUDES=()
+SUDO_REMOTE=""
 
 if tty -s >/dev/null 2>&1; then
     declare -A C=(
@@ -140,11 +134,9 @@ function do_rsync() {
         --relative
         --omit-dir-times
         --delete
-        --rsync-path '[ "$UID" != 0 ] && SUDO="sudo -n -- "; $SUDO rsync'
         --out-format " # %o %M %B %U:%G  /%f"
-        -e "ssh -T -l '$SSH_USER' -o IdentityFile='$SSH_IDENTITY' \
--o ConnectTimeout='$TIMEOUT' -o IdentitiesOnly=yes -o BatchMode=yes \
--o ClearAllForwardings=yes -o CheckHostIP=yes -o StrictHostKeyChecking=yes"
+        --rsync-path "$SUDO_REMOTE rsync"
+        -e "${SSHCMD[*]}"
     )
 
     local dry_run_format=' # %o %M %B %U:%G  /%f'
@@ -198,11 +190,13 @@ function do_rsync() {
 peers=()
 includes=()
 excludes=()
+argv=( "$@" )
 
 while (( $# > 0 )); do
     case "$1" in
         -c|--config) CONFIG=$2; shift ;;
         -f|--force) DRY_RUN= ;;
+        -R|--become-root) BECOMEROOT=1 ;;
         -H|--host) peers+=( "$2" ); shift ;;
         -i|--include) includes+=( "$2" ); shift ;;
         -e|--exclude) excludes+=( "$2" ); shift ;;
@@ -218,8 +212,19 @@ includes+=( "$@" )
 
 trap on_exit EXIT
 
-if [[ -z $CONFIG || ! -r $CONFIG ]] || ! source "$CONFIG"; then
-    fatal "Cannot load configuration file '$CONFIG'"
+if [[ -n $CONFIG && -r $CONFIG ]]; then
+    if ! source "$CONFIG"; then
+        fatal "Cannot load configuration file '$CONFIG'"
+    fi
+fi
+
+# This script is ment to be run as root.
+if (( $BECOMEROOT == 1 && $UID != 0 )); then
+    sudo_opts=( -u root )
+    [[ -t 0 ]] || sudo_opts=( -n )
+    exec sudo -u root "${sudo_opts[@]}" -- "$0" "${argv[@]}"
+elif (( $BECOMEROOT == 1 )); then
+    SUDO_REMOTE='[ "$UID" != 0 ] && SUDO="sudo -n -- "; $SUDO'
 fi
 
 if (( ${#peers[@]} > 0 )); then
