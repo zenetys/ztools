@@ -89,6 +89,8 @@ done
 
 [[ $XDEBUG == 1 ]] && set -x
 
+RPMBUILDOPTS+=( "$@" )
+
 declare SPECFILE=${ARGS[0]}
 [[ ${SPECFILE:0:1} != "/" ]] && SPECFILE=$PWD/$SPECFILE
 
