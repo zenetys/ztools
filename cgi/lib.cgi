@@ -30,8 +30,8 @@ function show_debug_info() {
   local var next
 
   for var in ${vars[@]} ; do
-    eval -- "[[ \${${var}:40:1} ]] && next='...' || next=''"
-    eval -- echo "$var=\${${var}:0:40}$next"
+    eval -- "[[ \${${var}:60:1} ]] && next='...' || next=''"
+    eval -- echo "$var=\${${var}:0:60}$next"
   done
 }
 
