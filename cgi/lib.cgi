@@ -37,11 +37,9 @@ function show_debug_info() {
 
 function url_decode() {
   local prefix="$1" ; shift
-  local string="$1" ; shift
   local sub var val
-  local IFS='&'
   
-  for sub in $string; do
+  for sub in $*; do
     [[ $sub ]] || continue
     var=${sub%%=*}             # get variable name
     var=${var//[^[:alnum:]]/_} # replace non alnum by '_'
@@ -63,11 +61,13 @@ trap on_exit EXIT
 
 declare SCRIPT="$1"; shift
 
-[[ ${QUERY_STRING} ]] && url_decode _GET_ "$QUERY_STRING"
+if [[ ${QUERY_STRING} ]]; then
+  IFS='&' url_decode _GET_ "$QUERY_STRING"
+fi
 
 if [[ ${CONTENT_LENGTH} ]]; then
   if (( ${CONTENT_LENGTH} < 8192 )); then
-    url_decode _${REQUEST_METHOD}_ "$(cat)"
+    IFS='&' url_decode _${REQUEST_METHOD}_ "$(cat)"
   else
     # do not parse too long POST
     declare _TEMP_CONTENT_DATA=$(mktemp)
