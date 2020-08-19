@@ -25,6 +25,7 @@ function show_debug_info() {
     ${!HTTP_*}
     ${!_GET_*}
     ${!_POST_*}
+    ${!_COOKIE_*}
     ${!_TEMP_*}
   )
   local var next
@@ -73,6 +74,10 @@ if [[ ${CONTENT_LENGTH} ]]; then
     declare _TEMP_CONTENT_DATA=$(mktemp)
     cat > $_TEMP_CONTENT_DATA
   fi
+fi
+
+if [[ ${HTTP_COOKIE} ]]; then
+  IFS='; ' url_decode _COOKIE_ "${HTTP_COOKIE}"
 fi
 
 [[ ${HTTP_X_DEBUG} -ge 1 ]] && show_debug_info >&2 2>/dev/null
