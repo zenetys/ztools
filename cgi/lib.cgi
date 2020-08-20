@@ -143,7 +143,7 @@ if [[ ${HTTP_COOKIE} ]]; then
   IFS='; ' var_decode _COOKIE_ "${HTTP_COOKIE}"
 fi
 
-[[ ${HTTP_X_DEBUG} -ge 1 ]] && show_debug_info >&2 2>/dev/null
+[[ ${HTTP_X_DEBUG} -ge 1 ]] && show_debug_info 2>/dev/null
 
 source $SCRIPT
 
