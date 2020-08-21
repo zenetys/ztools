@@ -70,19 +70,22 @@ function show_debug_info() {
     DOCUMENT_ROOT
     GATEWAY_INTERFACE
     QUERY_STRING
-    REMOTE_{ADDR,PORT}
     REQUEST_{METHOD,SCHEME,URI}
     SCRIPT_FILENAME
     SCRIPT_NAME
-    ${!SERVER_*}
-    ${!HTTP_*}
     ${!ENV_*}
+    ${!SERVER_*}
+    ${!REMOTE_*}
+    ${!HTTP_*}
+    ${!SSL_*}
     ${!_GET_*}
     ${!_POST_*}
     ${!_COOKIE_*}
     ${!_TEMP_*}
   )
   local var next
+
+  [[ ${HTTP_X_DEBUG} -ge 3 ]] && set && return
 
   for var in ${vars[@]} ; do
     eval -- "[[ \${${var}:60:1} ]] && next='...' || next=''"
