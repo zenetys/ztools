@@ -12,9 +12,9 @@ function header() {
   local header=$1 ; shift
 
   if [[ $HEADERS_SENT != 1 ]]; then
-    if [[ $name && "$name" != "--send" ]]; then
+    if [[ $header && "$header" != "--send" ]]; then
       echo -e "$header\r"
-    elif [[ $HEADERS_SENT != 1 ]]; then
+    else
       echo -e "\r"
       HEADERS_SENT=1
     fi
