@@ -11,18 +11,21 @@ function debug() {
 function header() {
   local name=$1 ; shift
   local value=$1 ; shift
-  if [[ $name ]]; then
-    echo -e "$name: $value\r"
-  elif [[ $HEADERS_SENT != 1 ]]; then
-    echo -e "\r"
-    HEADERS_SENT=1
+  if [[ $HEADERS_SENT != 1 ]]; then
+    if [[ $name && "$name" != "--send" ]]; then
+      echo -e "$name: $value\r"
+    elif [[ $HEADERS_SENT != 1 ]]; then
+      echo -e "\r"
+      HEADERS_SENT=1
+    fi
   fi
 }
 
 function html_page() {
   local title=$1; shift
   local body=$1; shift
-  header
+  header "Content-Type" "text/html"
+  header --send
   echo -n "<html><head><title>$title</title></head>"
   echo -n "<body><h1>$title</h1><p>$body</p></body>"
   echo -n "</html>"
@@ -38,8 +41,8 @@ function fatal() {
     printf "<!-- X-Error: %s -->" "$msg"
   else
     header "Status" 500
-    header "X-Error"
-    header
+    header "X-Error" "$msg"
+    header --send
     html_page "ERROR 500" "FATAL: $msg"
   fi
   exit 1
@@ -50,8 +53,8 @@ function data_begin() {
   [[ ${#1} == 2 && $1 == -n ]] && shift && unset cr
   if (( HEADERS_SENT != 1 )); then
     header "Status: 200"
-    header "Content-Type: text/html"
-    header
+    header "Content-Type: text/plain"
+    header --send
   fi
 }
 
@@ -86,7 +89,7 @@ function show_debug_info() {
 
   [[ ${HTTP_X_DEBUG} -ge 3 ]] && ( set -o posix ; set ) && return
 
-  header
+  header --send
   for var in ${vars[@]} ; do
     eval -- "[[ \${${var}:60:1} ]] && next='...' || next=''"
     eval -- echo "$var=\"\${${var}:0:60}$next\""
@@ -118,7 +121,7 @@ function var_decode() {
 
 function on_exit() {
   [[ $_TEMP_CONTENT_DATA ]] && rm -f $_TEMP_CONTENT_DATA
-  [[ $HEADERS_SENT == 1 ]] || header
+  [[ $HEADERS_SENT == 1 ]] || header --send
 }
 
 trap on_exit EXIT
