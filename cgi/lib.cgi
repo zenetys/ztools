@@ -5,16 +5,16 @@
 ## License: MIT
 
 function debug() {
-  printf "%s\n" "$*" >&2
+  echo "$*" "$*" >&2
 }
 
 function header() {
   local name=$1 ; shift
   local value=$1 ; shift
   if [[ $name ]]; then
-    printf "%s: %s\r\n" "${name}" "${value}"
-  else
-    printf "\r\n"
+    echo -e "$name: $value\r"
+  elif [[ $HEADERS_SENT != 1 ]]; then
+    echo -e "\r"
     HEADERS_SENT=1
   fi
 }
@@ -22,9 +22,11 @@ function header() {
 function html_page() {
   local title=$1; shift
   local body=$1; shift
+  header
   echo -n "<html><head><title>$title</title></head>"
   echo -n "<body><h1>$title</h1><p>$body</p></body>"
   echo -n "</html>"
+  echo
 }
 
 function fatal() {
@@ -43,16 +45,13 @@ function fatal() {
   exit 1
 }
 
-function echo() {
+function data_begin() {
   local cr="\n"
   [[ ${#1} == 2 && $1 == -n ]] && shift && unset cr
-  if (( HEADERS_SENT == 1 )); then
-    printf "%s$cr" "$1"
-  else
+  if (( HEADERS_SENT != 1 )); then
     header "Status: 200"
     header "Content-Type: text/html"
     header
-    printf "%s$cr" "$1"
   fi
 }
 
@@ -85,8 +84,9 @@ function show_debug_info() {
   )
   local var next
 
-  [[ ${HTTP_X_DEBUG} -ge 3 ]] && set && return
+  [[ ${HTTP_X_DEBUG} -ge 3 ]] && ( set -o posix ; set ) && return
 
+  header
   for var in ${vars[@]} ; do
     eval -- "[[ \${${var}:60:1} ]] && next='...' || next=''"
     eval -- echo "$var=\"\${${var}:0:60}$next\""
