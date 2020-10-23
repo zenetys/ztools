@@ -1,4 +1,8 @@
 #!/bin/bash
+#
+# Copyright(C) 2020 Benoit DOLEZ @ ZENETYS
+# This script is licensed under MIT License (http://opensource.org/licenses/MIT)
+#
 
 export LC_ALL=C
 shopt -s nullglob
