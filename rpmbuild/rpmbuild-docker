@@ -27,7 +27,7 @@ function version() {
   local AUTHOR=$(sed -n 's/^# Author: //p' $PROGFILE)
   local LICENSE=$(sed -n 's/^# License: //p' $PROGFILE)
 
-  echo "${PROGFILE##*/} $VERSION - $AUTHOR - $LICENSE"
+  echo "${PROGFILE##*/}${VERSION:+ $VERSION} - $AUTHOR - $LICENSE"
 }
 
 declare QUIET=$QUIET
