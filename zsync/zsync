@@ -174,11 +174,12 @@ function show_diff() {
 
 function do_remote() {
     local IFS=$'\t'
+    local -a FILES
     while read CMD REST; do
-       [[ $CMD == do_remote ]] && break
+       [[ $CMD == do_remote ]] && FILES=( $REST )
     done
     [[ $CMD == do_remote ]] || return 1
-    tar zc -C / $REST
+    tar zc -C / "${FILES[@]}"
     return $?
 }
 
@@ -215,7 +216,7 @@ function do_rsync() {
 
             if (( peer_retval != 0 )); then
                 error "Rsync to $i returned error code $peer_retval"
-                error "Try: ssh-copy-id${SSH_USER:+ -l $SSH_USER} ${SSH_IDENTITY:+-i $SSH_IDENTITY} -o StrictHostKeyChecking=ask $i"
+                error "Try: ssh-copy-id${SSH_USER:+ -l "$SSH_USER"} ${SSH_IDENTITY:+-i "$SSH_IDENTITY"} -o StrictHostKeyChecking=ask $i"
                 retval=1
                 continue
             fi
@@ -307,8 +308,8 @@ fi
 
 SSHCMD=(
     ssh -T
-    ${SSH_USER:+-l $SSH_USER}
-    ${SSH_IDENTITY:+-o IdentityFile=$SSH_IDENTITY}
+    ${SSH_USER:+-l "$SSH_USER"}
+    ${SSH_IDENTITY:+-o IdentityFile="$SSH_IDENTITY"}
     -o ConnectTimeout=$TIMEOUT
     -o IdentitiesOnly=yes
     -o BatchMode=no
