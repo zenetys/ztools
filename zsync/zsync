@@ -161,7 +161,7 @@ function show_diff() {
             declare -f do_remote
             echo "do_remote$IFS${ascii_files[*]}"
         ) |
-            "${SSHCMD[@]}" $i "[[ -x $0 ]] && $SUDO_REMOTE $0 --do-remote || $SUDO_REMOTE bash" |
+            "${SSHCMD[@]}" $i "[[ -x $0 ]] && CMD='$0 --do-remote' || CMD='bash'; $SUDO_REMOTE \$CMD" |
             tar zx -C $tempdir/old
         (
             cd $tempdir
@@ -174,12 +174,19 @@ function show_diff() {
 
 function do_remote() {
     local IFS=$'\t'
-    local -a FILES
+    local -a FILES=( )
     while read CMD REST; do
        [[ $CMD == do_remote ]] && FILES=( $REST )
     done
-    [[ $CMD == do_remote ]] || return 1
-    tar zc -C / "${FILES[@]}"
+    if [[ ${#FILES[@]} -gt 0 ]]; then
+        tar zc -C / "${FILES[@]}"
+    fi
+    return $?
+}
+
+function do_remote_rsync() {
+    [[ $1 == --server ]] || return 1
+    rsync "$@"
     return $?
 }
 
@@ -193,7 +200,7 @@ function do_rsync() {
         --relative
         --omit-dir-times
         --delete
-        --rsync-path "$SUDO_REMOTE rsync"
+        --rsync-path "[[ -x $0 ]] && CMD='$0 --do-rsync' || CMD='rsync' ; $SUDO_REMOTE \$CMD"
         -e "${SSHCMD[*]}"
     )
 
@@ -268,6 +275,7 @@ while (( $# > 0 )); do
         -i|--include) includes+=( "$2" ); shift ;;
         -e|--exclude) excludes+=( "$2" ); shift ;;
         --do-remote) do_remote; exit $? ;;
+        --do-rsync)  do_remote_rsync "${@:2}"; exit $? ;;
         -h|--help) exit_usage ;;
         --) shift; break ;;
         -*) exit_usage 1 ;;
