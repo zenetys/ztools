@@ -454,13 +454,14 @@ CA_KEYFILE=${BASEDIR:+$BASEDIR/}ca.key
 CA_CRTFILE=${BASEDIR:+$BASEDIR/}ca.crt
 CA_CNFFILE=${BASEDIR:+$BASEDIR/}ca.cnf
 
+# if ARGV[0] begin with /, it is a subject
 if [[ ${ARGS[0]} == "/" ]]; then
   shopt -s nocasematch
   SUBJECT="${ARGS[0]}"
   COMMON_NAME="${SUBJECT##*/CN=}"
   [[ -z ${COMMON_NAME//[^/=]} ]] ||
     fatal "empty or bad Common Name"
-else
+else # it's a common name
   COMMON_NAME=${ARGS[0]}
   SUBJECT="/CN=$COMMON_NAME"
 fi
