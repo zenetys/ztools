@@ -139,9 +139,15 @@ function yesno() {
 }
 
 function echo_quoted() {
-  local IFS=''
-  local FIRST=$1 ; shift
-  echo "${PREFIX:+$PREFIX }'$FIRST${*/#/\' \'}'"
+  local s=$1 ; shift
+
+  echo -n "${PREFIX:+$PREFIX }"
+  # A..Z a..z 0..9 + - , . / =
+  [[ $s && -z ${s//[A-Za-z+-9=_]} ]] && echo -n "$s" || echo -n " '${s}'"
+  for s in "$@"; do
+    [[ $s && -z ${s//[A-Za-z+-9=_]} ]] && echo -n " $s" || echo -n " '${s}'"
+  done
+  echo
 }
 
 function openssl_debug() {
@@ -311,7 +317,7 @@ function usage() {
   return 0
 }
 
- function version() {
+function version() {
   local PROGFILE=$0
   local VERSION=$(sed -n 's/^# Version: //p' $PROGFILE)
   local AUTHOR=$(sed -n 's/^# Author: //p' $PROGFILE)
