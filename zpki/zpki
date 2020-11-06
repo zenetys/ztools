@@ -9,7 +9,7 @@
 # filename usage to determine action
 # zpki init
 # zpki create-key CNAME
-# zpki create-req CNAME
+# zpki create-csr CNAME
 # zpki create-crt CNAME
 
 # directory tree :
@@ -19,7 +19,7 @@
 # ca.key            : CA Private Key
 # keys/SUBJ.key     : SUBJ CommonName Private Key
 # certs/SUBJ.crt    : SUBJ CommonName Certificate
-# requests/SUBJ.req : SUBJ CommonName Certificate Request
+# requests/SUBJ.csr : SUBJ CommonName Certificate Request
 
 NUMBITS=${ZPKI_NUMBITS:-4096}
 NUMDAYS=${ZPKI_NUMDAYS:-3653}
@@ -34,7 +34,7 @@ DEFAULT_CONFIG="
 default_ca             = default_ca_section
 
 [ default_ca_section ]
-dir                    = \$ENV::PWD
+dir                    = ${BASEDIR}
 certs                  = \$dir/certs
 new_certs_dir          = \$dir/certs.new
 crl_dir                = \$dir/crl
@@ -260,24 +260,24 @@ function create-key() {
   is-error "can't create key '$KEYFILE'" || return
 }
 
-#X-ACTION create-req CN|SUBJ [ALTNAMES...]: create request
-function create-req() {
-  local REQFILE=${1:-$REQFILE}
-  [[ $FORCE ]] && FORCE_CREATE_REQ=1 && unset FORCE
-  is-exists -$FORCE_CREATE_REQ "$REQFILE" && return 0
-  yesno "create certificate request '$REQFILE' ?" || return
+#X-ACTION create-csr CN|SUBJ [ALTNAMES...]: create request
+function create-csr() {
+  local CSRFILE=${1:-$CSRFILE}
+  [[ $FORCE ]] && FORCE_CREATE_CSR=1 && unset FORCE
+  is-exists -$FORCE_CREATE_CSR "$CSRFILE" && return 0
+  yesno "create certificate request '$CSRFILE' ?" || return
   create-key "$KEYFILE" || return
   PARAMS=(
     -batch
     -new
-    -out "$REQFILE"
+    -out "$CSRFILE"
     -key "$KEYFILE"
     ${SUBJECT:+-subj "$SUBJECT"}
     ${SUBJALT:+-addext "subjectAltName=$SUBJALT"}
     ${PASSWORD:+-passin env:PASSWORD}
   )
   $OPENSSL req "${PARAMS[@]}"
-  is-error "can't create certificate request '$REQFILE'" || return
+  is-error "can't create certificate request '$CSRFILE'" || return
 }
 
 #X-ACTION create-self CN|SUBJ [ALTNAMES...]: create self signed certificate
@@ -340,33 +340,47 @@ function create-crt() {
   local CRTFILE=${1:-$CRTFILE}
   [[ $FORCE ]] && FORCE_CREATE_CRT=1 && unset FORCE
   is-exists -$FORCE_CREATE_CRT "$CRTFILE" && return 0
-  yesno "create certificate '$CRTFILE' ?" || return
-  CNFFILE="$CA_CNFFILE" create-req "$REQFILE" || return
+  yesno "create certificate '$SUBJECT' ($CRTFILE) ?" || return
+  create-csr "$CSRFILE" || return
   PARAMS=(
     -config "$CA_CNFFILE"
     -batch
-    -in  "$REQFILE"
+    -in  "$CSRFILE"
     -out "$CRTFILE"
     -days $NUMDAYS
     -extensions ${EXT:-x509v3_ext}
     ${PASSWORD:+-passin env:CA_PASSWORD}
   )
   $OPENSSL ca "${PARAMS[@]}"
-  is-error "can't sign request '$REQFILE' to '$CRTFILE'" || return
+  is-error "can't sign request '$CSRFILE' to '$CRTFILE'" || return
 }
 
-#X-ACTION revoke: revoke certificate
-function revoke() {
-  ## FIXME
-  # revoke
-  return 0
+#X-ACTION sign [CSRFILE]: sign request given in file using CA
+function ca-sign-csr() {
+  local CSRFILE=${1:-$CSRFILE}
+  local CRTFILE=${CRTFILE:-${CSRFILE%.csr}.crt}
+  SUBJECT=$(openssl req -in $CSRFILE -subject -noout)
+  [[ ${SUBJECT:0:8} == "subject=" ]] && SUBJECT=${SUBJECT:8} ||
+    fatal "can't get subject in CSR '$CSRFILE'"
+  SUBJECT=/${SUBJECT//, /\/}
+  SUBJECT=${SUBJECT// = /=}
+  COMMON_NAME=${SUBJECT##*/CN=}
+  COMMON_NAME=${COMMON_NAME%%,*}
+  create-crt "$CRTFILE"
 }
 
 #X-ACTION update: upate certificate
-function update() {
+function ca-update-csr() {
   ## FIXME
   # update DB
   # gencrl
+  return 0
+}
+
+#X-ACTION revoke: revoke certificate
+function ca-revoke-crt() {
+  ## FIXME
+  # revoke
   return 0
 }
 
@@ -457,21 +471,33 @@ CA_KEYFILE=${BASEDIR:+$BASEDIR/}ca.key
 CA_CRTFILE=${BASEDIR:+$BASEDIR/}ca.crt
 CA_CNFFILE=${BASEDIR:+$BASEDIR/}ca.cnf
 
-# if ARGV[0] begin with /, it is a subject
-if [[ ${ARGS[0]} == "/" ]]; then
+if [[ -r ${ARGS[0]} ]]; then
+  # ARGV[0] is a filename
+  FILENAME=${ARGV[0]}
+elif [[ ${ARGS[0]} == "/" ]]; then
+  # if ARGV[0] begin with /, it is a subject
   shopt -s nocasematch
   SUBJECT="${ARGS[0]}"
   COMMON_NAME="${SUBJECT##*/CN=}"
   [[ -z ${COMMON_NAME//[^/=]} ]] ||
     fatal "empty or bad Common Name"
-elif [[ ${ARGS[0]} ]]; then # it's a non empty common name
+elif [[ ${ARGS[0]} ]]; then
+  # it's a non empty common name
   COMMON_NAME=${ARGS[0]}
   SUBJECT="/CN=$COMMON_NAME"
+else
+  unset COMMON_NAME
 fi
 
-for ((i=1;i<${#ARGS[@]};i++)) ; do
-  SUBJALT="${SUBJALT:+$SUBJALT,}${ARGS[i]}"
-done
+if [[ $COMMON_NAME ]]; then
+  # only read subj altnames if CN is already read
+  for ((i=1;i<${#ARGS[@]};i++)) ; do
+    SUBJALT="${SUBJALT:+$SUBJALT,}${ARGS[i]}"
+  done
+else
+  $ACTION "${ARGS[@]}"
+  exit $?
+fi
 
 if [[ $ACTION == create-cnf ]]; then
   create-cnf ${CNFFILE:-CA_CNFFILE}
@@ -482,25 +508,22 @@ elif [[ $ACTION == create-ca ]]; then
   exit $?
 fi
 
-[[ -z $COMMON_NAME ]] &&
-  fatal "empty Common Name"
-
-FILENAME=${COMMON_NAME//[^A-Za-z0-9@_-]/_}
-
 if [[ $BASEDIR && ! -e $CA_CRTFILE ]]; then
   SUBJECT=${SUBJECT:-"/CN=Certificate Authority"} create-ca || exit $?
 fi
 
+[[ -z $FILENAME && $COMMON_NAME ]] && FILENAME=${COMMON_NAME//[^A-Za-z0-9@_-]/_}
+
 if [[ -e $CA_CRTFILE ]]; then
   CNFFILE=${CNFFILE:-$CA_CNFFILE}
-  KEYFILE=${KEYFILE:-private/$FILENAME.key}
-  CRTFILE=${CRTFILE:-certs/$FILENAME.crt}
-  REQFILE=${REQFILE:-certs/$FILENAME.req}
+  KEYFILE=${KEYFILE:-$CA_PATH/private/$FILENAME.key}
+  CRTFILE=${CRTFILE:-$CA_PATH/certs/$FILENAME.crt}
+  CSRFILE=${CSRFILE:-$CA_PATH/certs/$FILENAME.csr}
 else
   KEYFILE=${KEYFILE:-$FILENAME.key}
   CNFFILE=${CNFFILE:-$FILENAME.cnf}
   CRTFILE=${CRTFILE:-$FILENAME.crt}
-  REQFILE=${REQFILE:-$FILENAME.req}
+  CSRFILE=${CSRFILE:-$FILENAME.csr}
 fi
 
 $ACTION
