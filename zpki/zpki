@@ -176,6 +176,7 @@ function is-error() {
   return $ERR
 }
 
+#X-ACTION create-cnf: create default openssl config file (CIPHER, NUMBITS)
 function create-cnf() {
   local CNFFILE=${1:-$CNFFILE}
   [[ $FORCE ]] && FORCE_CREATE_CNF=1 && unset FORCE
@@ -187,6 +188,7 @@ function create-cnf() {
   return 0
 }
 
+#X-ACTION create-key: create key file using CIPHER, PASSWORD, NUMBITS
 function create-key() {
   local KEYFILE=${1:-$KEYFILE}
   [[ $FORCE ]] && FORCE_CREATE_KEY=1 && unset FORCE
@@ -202,6 +204,7 @@ function create-key() {
   is-error "can't create key '$KEYFILE'" || return
 }
 
+#X-ACTION create-req: create request with SUBJECT, SUBJALT
 function create-req() {
   local REQFILE=${1:-$REQFILE}
   [[ $FORCE ]] && FORCE_CREATE_REQ=1 && unset FORCE
@@ -221,6 +224,7 @@ function create-req() {
   is-error "can't create certificate request '$REQFILE'" || return
 }
 
+#X-ACTION create-self: create self signed certificate using SUBJECT, SUBJALT
 function create-self() {
   local CRTFILE=${1:-$CRTFILE}
   [[ $FORCE ]] && FORCE_CREATE_CRT=1 && unset FORCE
@@ -242,6 +246,7 @@ function create-self() {
   is-error "can't create auto-signed '$CRTFILE'" || return
 }
 
+#X-ACTION create-ca: create certificat authority & storage
 function create-ca() {
   local CNFFILE=$CA_CNFFILE
   local KEYFILE=$CA_KEYFILE
@@ -251,7 +256,7 @@ function create-ca() {
   local SERIAL=$RANDOM$RANDOM$RANDOM
 
   create-cnf  "$CNFFILE" || return
-  PASSWORD=$CA_PASSWORD create-key  "$KEYFILE" || return
+  PASSWORD=$CA_PASSWORD create-key "$KEYFILE" || return
   PASSWORD=$CA_PASSWORD EXT="ca_ext" create-self "$CRTFILE" || return
   [[ -d $CA_PATH ]]            || mkdir -p $CA_PATH
   [[ -d $CA_PATH/certs ]]      || mkdir $CA_PATH/certs
@@ -269,6 +274,7 @@ function create-cert() {
   create-crt "$@"
 }
 
+#X-ACTION create-crt: create certificate with NUMDAYS
 function create-crt() {
   local CRTFILE=${1:-$CRTFILE}
   [[ $FORCE ]] && FORCE_CREATE_CRT=1 && unset FORCE
@@ -288,12 +294,14 @@ function create-crt() {
   is-error "can't sign request '$REQFILE' to '$CRTFILE'" || return
 }
 
+#X-ACTION revoke: revoke certificate
 function revoke() {
   ## FIXME
   # revoke
   return 0
 }
 
+#X-ACTION update: upate certificate
 function update() {
   ## FIXME
   # update DB
@@ -314,6 +322,13 @@ function usage() {
       printf " %-20s %s\n" "$OPT" "$DESC"
     done
   echo
+  echo "<ACTION> is one of :"
+  sed -nr "s/^#X-ACTION ([^:]*): /\1\t/p" -- "$0" |
+    while read OPT DESC ; do
+      printf " %-20s %s\n" "$OPT" "$DESC"
+    done
+  echo
+
   return 0
 }
 
@@ -363,7 +378,7 @@ done
 ## main program starts here
 ####################################################
 
-## FIXME : smart detection of action wanted
+## FIXME - smart detection of action wanted
 
 [[ $PASSWORD ]] && export PASSWORD
 [[ $CA_PASSWORD ]] && export CA_PASSWORD
