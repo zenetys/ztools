@@ -383,6 +383,11 @@ while (( $# > 0 )); do
   shift
 done
 
+[[ -z ${ARGS[@]} ]] &&
+  fatal --usage "need ACTION"
+
+COMMAND=${ARGS[0]}; shift
+
 [[ $XDEBUG == 1 ]] && set -x
 
 ####################################################
@@ -394,19 +399,26 @@ done
 [[ $PASSWORD ]] && export PASSWORD
 [[ $CA_PASSWORD ]] && export CA_PASSWORD
 
-COMMAND=${ARGS[0]}
-COMMON_NAME=${ARGS[1]}
-
 CA_PATH=${BASEDIR:-.}
 CA_KEYFILE=${BASEDIR:+$BASEDIR/}ca.key
 CA_CRTFILE=${BASEDIR:+$BASEDIR/}ca.crt
 CA_CNFFILE=${BASEDIR:+$BASEDIR/}ca.cnf
 
-[[ -z $COMMON_NAME ]] && exit 99
+if [[ ${ARGS[0]} == "/" ]]; then
+  shopt -s nocasematch
+  SUBJECT="${ARGS[0]}"
+  COMMON_NAME="${SUBJECT##*/CN=}"
+  [[ -z ${COMMON_NAME//[^/=]} ]] ||
+    fatal "empty or bad Common Name"
+else
+  COMMON_NAME=${ARGS[0]}
+  SUBJECT="/CN=$COMMON_NAME"
+fi
 
-SUBJECT="/CN=$COMMON_NAME"
+[[ -z $COMMON_NAME ]] &&
+  fatal "empty Common Name"
 
-for ((i=2;i<${#ARGS[@]};i++)) ; do
+for ((i=1;i<${#ARGS[@]};i++)) ; do
   SUBJALT="${SUBJALT:+$SUBJALT,}${ARGS[i]}"
 done
 
