@@ -415,7 +415,7 @@ while (( $# > 0 )); do
     ## -q, --quiet: Set verbose level to 0
     -q|--quiet) ((VERBOSE=0)) ;;
     ## -C, --ca: Set current CA base directory
-    --ca) BASEDIR=$2 ; shift ;;
+    -C|--ca) BASEDIR=$2 ; shift ;;
     ## -y, --yes: valid all response
     -y|--yes) YES=1 ;;
     ## -c, --cipher: Define cipher (none for no encryption)
