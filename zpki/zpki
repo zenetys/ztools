@@ -285,7 +285,7 @@ function create-self() {
   local CRTFILE=${1:-$CRTFILE}
   [[ $FORCE ]] && FORCE_CREATE_CRT=1 && unset FORCE
   is-exists -$FORCE_CREATE_CRT $CRTFILE && return 0
-  yesno "create self-signed certificate '$CRTFILE' ?" || return
+  yesno "create self-signed certificate '$SUBJECT' ($CRTFILE)?" || return
   create-cnf "$CNFFILE" || return
   create-key "$KEYFILE" || return
   PARAMS=(
@@ -313,7 +313,7 @@ function create-ca() {
 
   if [[ ! -d $CA_PATH ]]; then
     yesno "Create CA storage directory '$CA_PATH'" ||
-      fatal "'$CA_PATH': No such file or directory"
+      fatal "Can't create CA storage directory '$CA_PATH'"
     mkdir -p $CA_PATH
   fi
 
@@ -438,7 +438,7 @@ done
 [[ -z ${ARGS[@]} ]] &&
   fatal --usage "need ACTION"
 
-ACTION=${ARGS[0]}; unset ARGS[0]
+ACTION=${ARGS[0]}; ARGS=( ${ARGS[@]:1} )
 
 declare -f $ACTION > /dev/null ||
   fatal "undefine action '$ACTION'"
@@ -464,13 +464,10 @@ if [[ ${ARGS[0]} == "/" ]]; then
   COMMON_NAME="${SUBJECT##*/CN=}"
   [[ -z ${COMMON_NAME//[^/=]} ]] ||
     fatal "empty or bad Common Name"
-else # it's a common name
+elif [[ ${ARGS[0]} ]]; then # it's a non empty common name
   COMMON_NAME=${ARGS[0]}
   SUBJECT="/CN=$COMMON_NAME"
 fi
-
-[[ -z $COMMON_NAME ]] &&
-  fatal "empty Common Name"
 
 for ((i=1;i<${#ARGS[@]};i++)) ; do
   SUBJALT="${SUBJALT:+$SUBJALT,}${ARGS[i]}"
