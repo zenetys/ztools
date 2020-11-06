@@ -473,9 +473,26 @@ for ((i=1;i<${#ARGS[@]};i++)) ; do
   SUBJALT="${SUBJALT:+$SUBJALT,}${ARGS[i]}"
 done
 
+if [[ $ACTION == create-cnf ]]; then
+  create-cnf ${CNFFILE:-CA_CNFFILE}
+  exit $?
+elif [[ $ACTION == create-ca ]]; then
+  SUBJECT=${SUBJECT:-"/CN=Certificate Authority"}
+  create-ca
+  exit $?
+fi
+
+[[ -z $COMMON_NAME ]] &&
+  fatal "empty Common Name"
+
 FILENAME=${COMMON_NAME//[^A-Za-z0-9@_-]/_}
-if [[ $CA || $ACTION == "create-crt" ]] ; then
-  SUBJECT=${CA_SUBJECT:-"/CN=Certificate Authority"} create-ca || return
+
+if [[ $BASEDIR && ! -e $CA_CRTFILE ]]; then
+  SUBJECT=${SUBJECT:-"/CN=Certificate Authority"} create-ca || exit $?
+fi
+
+if [[ -e $CA_CRTFILE ]]; then
+  CNFFILE=${CNFFILE:-$CA_CNFFILE}
   KEYFILE=${KEYFILE:-private/$FILENAME.key}
   CRTFILE=${CRTFILE:-certs/$FILENAME.crt}
   REQFILE=${REQFILE:-certs/$FILENAME.req}
