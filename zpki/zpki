@@ -94,10 +94,21 @@ keyUsage               = cRLSign, keyCertSign
 subjectKeyIdentifier   = hash
 authorityKeyIdentifier = keyid,issuer
 basicConstraints       = CA:false
+# nsCertType             = @nsCertType_section
 # keyUsage               = @keyUsage_section
 # extendedKeyUsage       = @extendedKeyUsage_section
 # subjectAltName         = email:copy
 # issuerAltName          = issuer:copy
+
+[ nsCertType_section ]
+# client            = true
+# server            = true
+# email             = true
+# objsign           = true
+# reserved          = true
+# sslCA             = true
+# emailCA           = true
+# objCA             = true
 
 [ keyUsage_section ]
 # digitalSignature = true
