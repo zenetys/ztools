@@ -311,10 +311,15 @@ function create-ca() {
   local FORCE_CREATE_CRT # empty
   local SERIAL=$RANDOM$RANDOM$RANDOM
 
+  if [[ ! -d $CA_PATH ]]; then
+    yesno "Create CA storage directory '$CA_PATH'" ||
+      fatal "'$CA_PATH': No such file or directory"
+    mkdir -p $CA_PATH
+  fi
+
   create-cnf  "$CNFFILE" || return
   PASSWORD=$CA_PASSWORD create-key "$KEYFILE" || return
   PASSWORD=$CA_PASSWORD EXT="ca_ext" create-self "$CRTFILE" || return
-  [[ -d $CA_PATH ]]            || mkdir -p $CA_PATH
   [[ -d $CA_PATH/certs ]]      || mkdir $CA_PATH/certs
   [[ -d $CA_PATH/certs.new ]]  || mkdir $CA_PATH/certs.new
   [[ -d $CA_PATH/crl ]]        || mkdir $CA_PATH/crl
@@ -445,13 +450,6 @@ COMMAND=${ARGS[0]}; shift
 [[ $CA_PASSWORD ]] && export CA_PASSWORD
 
 CA_PATH=${BASEDIR:-.}
-
-if [[ ! -d $CA_PATH ]]; then
-  yesno "Create CA storage directory '$CA_PATH'" ||
-    fatal "'$CA_PATH': No such file or directory"
-  mkdir -p $CA_PATH
-fi
-
 CA_KEYFILE=${BASEDIR:+$BASEDIR/}ca.key
 CA_CRTFILE=${BASEDIR:+$BASEDIR/}ca.crt
 CA_CNFFILE=${BASEDIR:+$BASEDIR/}ca.cnf
