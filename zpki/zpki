@@ -433,12 +433,12 @@ while (( $# > 0 )); do
   shift
 done
 
+[[ $XDEBUG == 1 ]] && set -x
+
 [[ -z ${ARGS[@]} ]] &&
   fatal --usage "need ACTION"
 
 COMMAND=${ARGS[0]}; unset ARGS[0]
-
-[[ $XDEBUG == 1 ]] && set -x
 
 ####################################################
 ## main program starts here
