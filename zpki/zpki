@@ -438,7 +438,10 @@ done
 [[ -z ${ARGS[@]} ]] &&
   fatal --usage "need ACTION"
 
-COMMAND=${ARGS[0]}; unset ARGS[0]
+ACTION=${ARGS[0]}; unset ARGS[0]
+
+declare -f $ACTION > /dev/null ||
+  fatal "undefine action '$ACTION'"
 
 ####################################################
 ## main program starts here
@@ -474,7 +477,7 @@ for ((i=1;i<${#ARGS[@]};i++)) ; do
 done
 
 FILENAME=${COMMON_NAME//[^A-Za-z0-9@_-]/_}
-if [[ $CA || $COMMAND == "create-crt" ]] ; then
+if [[ $CA || $ACTION == "create-crt" ]] ; then
   SUBJECT=${CA_SUBJECT:-"/CN=Certificate Authority"} create-ca || return
   KEYFILE=${KEYFILE:-private/$FILENAME.key}
   CRTFILE=${CRTFILE:-certs/$FILENAME.crt}
@@ -486,6 +489,6 @@ else
   REQFILE=${REQFILE:-$FILENAME.req}
 fi
 
-$COMMAND
+$ACTION
 
 
