@@ -436,7 +436,7 @@ done
 [[ -z ${ARGS[@]} ]] &&
   fatal --usage "need ACTION"
 
-COMMAND=${ARGS[0]}; shift
+COMMAND=${ARGS[0]}; unset ARGS[0]
 
 [[ $XDEBUG == 1 ]] && set -x
 
