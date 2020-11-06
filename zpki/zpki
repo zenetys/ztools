@@ -381,7 +381,7 @@ function usage() {
   echo "<ACTION> is one of :"
   sed -nr "s/^#X-ACTION ([^:]*): /\1\t/p" -- "$0" |
     while read OPT DESC ; do
-      printf " %-20s %s\n" "$OPT" "$DESC"
+      printf " %s\n     %s\n" "$OPT" "$DESC"
     done
   echo
 
