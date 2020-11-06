@@ -135,6 +135,51 @@ basicConstraints       = CA:false
 # msEFS            = true    # Microsoft Encrypted File System
 "
 
+if tty -s >/dev/null 2>&1; then
+    declare -A C=(
+        [info]=$'\x1b[1m'
+        [warning]=$'\x1b[7;33m'
+        [error]=$'\x1b[7;91m'
+        [fatal]=$'\x1b[7;1;91m'
+        [blue]=$'\x1b[7;34m'
+        [reset]=$'\x1b[m'
+    )
+    HAS_TTY=1
+else
+    declare -A C=()
+    HAS_TTY=
+fi
+
+function info() {
+    local i;
+    local l=info
+    [[ ${1:0:2} == -- ]] && l=${1:2} && shift
+    for i in "$@"; do
+        printf '%s: %s\n' "${C[$l]}${l^^}${C[reset]}" "$i";
+    done
+}
+
+function fatal() {
+    local usage=0
+    [[ $1 == --usage ]] && usage=1 && shift
+    info --${FUNCNAME[0]} "$@"
+    (( $usage )) && usage
+    exit 1
+}
+
+function error() {
+    info --${FUNCNAME[0]} "$@"
+}
+
+function warning() {
+    info --${FUNCNAME[0]} "$@"
+}
+
+function debug() {
+    (( DEBUG == 0 )) && return 0
+    info --${FUNCNAME[0]} "$@"
+}
+
 function yesno() {
   local QUESTION="$1" ; shift
   [[ $YES == 1 ]] && return 0
