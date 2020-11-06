@@ -362,8 +362,8 @@ while (( $# > 0 )); do
     --ca) BASEDIR=$2 ; shift ;;
     ## -y, --yes: valid all response
     -y|--yes) YES=1 ;;
-    ## -C, --cipher: Define cipher (none for no encryption)
-    -C|--cipher) CIPHER=$2 ; [[ $CIPHER == none ]] && unset CIPHER ; shift ;;
+    ## -c, --cipher: Define cipher (none for no encryption)
+    -c|--cipher) CIPHER=$2 ; [[ $CIPHER == none ]] && unset CIPHER ; shift ;;
     # generic args
     --) shift ; break ;;
     -*) usage "Unknown parameter '$1'" && exit 1 ;;
