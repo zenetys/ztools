@@ -353,6 +353,62 @@ function create-crt() {
   )
   $OPENSSL ca "${PARAMS[@]}"
   is-error "can't sign request '$CSRFILE' to '$CRTFILE'" || return
+
+  ca-update-db $CRTFILE >> $CA_PATH/ca.idz
+
+}
+
+function ca-update-db() {
+  if [[ $1 ]]; then
+    local CRTFILE=$1
+    local IFS=$'\n'
+    local hash serial notBefore notAfter subject issuer email
+    for A in hash=$(openssl x509 -in $CRTFILE -noout -hash -serial -startdate -enddate -email -subject -issuer); do
+      eval "${A%%=*}='${A#*=}'"
+    done
+    subject="/${subject//, /\/}"; subject="${subject// = /=}"
+    issuer="/${issuer//, /\/}"; issuer="${issuer// = /=}"
+    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$serial" "$hash" \
+         $(date -Iseconds -d "$notBefore") $(date -Iseconds -d "$notAfter") \
+         "$subject" "$issuer" "$email"
+    return
+
+  fi
+
+  $OPENSSL ca -config "$CA_CNFFILE" -updatedb
+  rm $CA_PATH/ca.idz.new
+  find $CA_PATH/certs.new -maxdepth 1 -type f -name "*.pem" | while read; do
+    ca-update-db $REPLY >> $CA_PATH/ca.idz.new
+  done
+  mv -f $CA_PATH/ca.idz.new $CA_PATH/ca.idz
+}
+
+#X-ACTION ca-list: list certificates store in CA
+function ca-list() {
+  local CA_IDXFILE=$CA_PATH/ca.idx
+  awk < $CA_IDXFILE '
+  BEGIN {
+    FS="\t";
+    printf("[\n");
+  }
+  function rfc3339(date) {
+    ds = gensub("(..)", "\\1 ", "g", date)
+    return (strftime("%Y-%m-%dT%H:%M:%S%z", mktime("20" ds)));
+  }
+  {
+    printf(" %s{",((NR==1)?"":","));
+    printf("\"status\":\"%s\"",$1);
+    printf(",\"expiration\":\"%s\"", rfc3339($2));
+    if ($3) printf(",\"revocation\":\"%s\"", rfc3339($3));
+    printf(",\"serial\":\"%s\"", $4);
+    # printf(",\"filename\":\"%s\"", $5);
+    printf(",\"subject\":\"%s\"", $6);
+    printf("}\n");
+  }
+  END {
+    printf("]\n");
+  }
+  '
 }
 
 #X-ACTION ca-sign-csr CN|SUBJ|CSRFILE: sign request given in file using CA
