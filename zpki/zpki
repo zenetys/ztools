@@ -164,7 +164,7 @@ function fatal() {
     [[ $1 == --usage ]] && usage=1 && shift
     info --${FUNCNAME[0]} "$@"
     (( $usage )) && usage
-    exit 1
+    exit 127
 }
 
 function error() {
@@ -355,7 +355,7 @@ function create-crt() {
   is-error "can't sign request '$CSRFILE' to '$CRTFILE'" || return
 }
 
-#X-ACTION sign [CSRFILE]: sign request given in file using CA
+#X-ACTION ca-sign-csr CN|SUBJ|CSRFILE: sign request given in file using CA
 function ca-sign-csr() {
   local CSRFILE=${1:-$CSRFILE}
   local CRTFILE=${CRTFILE:-${CSRFILE%.csr}.crt}
@@ -369,19 +369,40 @@ function ca-sign-csr() {
   create-crt "$CRTFILE"
 }
 
-#X-ACTION update: upate certificate
-function ca-update-csr() {
-  ## FIXME
-  # update DB
-  # gencrl
+#X-ACTION ca-update-crt CN|SUBJ|CRTFILE: upate certificate
+function ca-update-crt() {
+  local CRTFILE=${1:-$CRTFILE}
+  local CSRFILE=${CSRFILE:-${CRTFILE%.crt}.csr}
+  SUBJECT=$(openssl req -in $CSRFILE -subject -noout)
+  [[ ${SUBJECT:0:8} == "subject=" ]] && SUBJECT=${SUBJECT:8} ||
+    fatal "can't get subject in CSR '$CSRFILE'"
+  yesno "Are you sure to update (revoke/sign) '$SUBJECT'" || return
+  YES=1 ca-revoke-crt $CRTFILE
+  YES=1 ca-sign-csr $CSRFILE
   return 0
 }
 
-#X-ACTION revoke: revoke certificate
+#X-ACTION ca-revoke-crt CN|SUBJ|CRTFILE: revoke certificate
 function ca-revoke-crt() {
-  ## FIXME
-  # revoke
-  return 0
+  local CRTFILE=${1:-$CRTFILE}
+  SUBJECT=$(openssl x509 -in $CRTFILE -subject -noout)
+  [[ ${SUBJECT:0:8} == "subject=" ]] && SUBJECT=${SUBJECT:8} ||
+    fatal "can't get subject in CRT '$CRTFILE'"
+  SUBJECT=/${SUBJECT//, /\/}
+  SUBJECT=${SUBJECT// = /=}
+  COMMON_NAME=${SUBJECT##*/CN=}
+  COMMON_NAME=${COMMON_NAME%%,*}
+  yesno "Revoke certificate '$SUBJECT' ($CRTFILE)" || return
+  
+  PARAMS=(
+    -config "$CA_CNFFILE"
+    -batch
+    -revoke "$CRTFILE"
+    -gencrl
+    ${PASSWORD:+-passin env:CA_PASSWORD}
+  )
+  $OPENSSL ca "${PARAMS[@]}"
+  is-error "can't revoke certificate '$SUBJECT'" || return
 }
 
 function usage() {
