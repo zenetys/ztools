@@ -194,6 +194,7 @@ function do_rsync() {
     local i retval=0 peer_retval
     local rsync_opts=(
         --archive # -rlptgoD
+        --update
         --one-file-system
         --compress
         --checksum
