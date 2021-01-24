@@ -480,7 +480,7 @@ function usage() {
       printf " %s\n     %s\n" "$OPT" "$DESC"
     done
   echo
-
+  echo "For SubjAltName, add address type : DNS:<FQDN>, IP:ADDR"
   return 0
 }
 
