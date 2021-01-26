@@ -70,7 +70,7 @@ while (( $# > 0 )); do
     ## -O, --outputdir PATH: define output directory for generated packages 
     -O|--outputdir) OUTPUTDIR=${2%/} ; shift ;;
     ## --no-download: skip downloading sources if needed
-    --no-download) DOWNLOAD=0 ; shift ;;
+    --no-download) DOWNLOAD=0 ;;
     ## --repo PATH: local repository
     --repo) REPO=$2 ; shift ;;
     ## --update: update repository with new packages
