@@ -1,0 +1,34 @@
+#!/bin/bash
+# 
+# Copyright 2021 (C) ZENETYS
+# License: MIT
+# Author: Benoit DOLEZ <bdolez@zenetys.com>
+# 
+
+# inspired from:
+# https://shallowsky.com/blog/linux/install/blocking-deb-dependencies.html
+
+function build-fake-pkg-deb() {
+  # need two args
+  [[ $# == 2 ]] || return 1
+  local output=$1; shift
+  local name=${1%%:*} version=${1#*:}; shift
+  local temp=$(mktemp -d)
+  mkdir $temp/DEBIAN
+  cat > $temp/DEBIAN/control <<-__EOF__
+	Section: misc
+	Priority: optional
+	Standards-Version: $version
+	Package: $name
+	Version: $version
+	Architecture: all
+	Maintainer: Nobody <nobody@nowhere.net>
+	Description: ${name} fake package to satisfy dependency
+	__EOF__
+  dpkg-deb -b $temp $output
+  rm -rf $temp
+}
+
+(( ${#_BASH_SOURCE[@]} == 0 )) &&
+  build-fake-pkg-deb "$@"
+
