@@ -1,0 +1,187 @@
+#!/bin/bash
+#
+# Copyright(C) 2021 Benoit DOLEZ @ ZENETYS
+# This script is licensed under MIT License (http://opensource.org/licenses/MIT)
+#
+
+# typical usage:
+#
+# $ xls2bash test.xls
+# sheet=1 row=1 cell_1="##" cell_2="number" cell_3="string"
+# sheet=1 row=2 cell_1="" cell_2="12" cell_3="test"
+#
+# $ xls2bash --detect-headers --ignore-comments test.xls
+# headers=( number string )
+# sheet=1 row=1 number="12" string="test"
+#
+
+# NOTE: cells containing " just before <CR> are not supported, add blank
+#       before <CR>
+
+export LC_ALL=C
+shopt -s nullglob
+set -o pipefail
+set -f
+
+csv2bash() {
+  awk -v AH="$AUTO_HEADERS" \
+      -v NC="$NO_COMMENTS" \
+      -v FS="${DELIMITER}" \
+      -v QUOTECHAR="${QUOTECHAR}" \
+      -v FORMFEED="${FORMFEED}" '
+  BEGIN {
+    ns = 1; nr = 1;
+  }
+  {
+    nc = 1;
+    nf = NF;
+    delete cell;
+    if ($0 == FORMFEED) {
+      ns++; nr = 1;
+      next;
+    }
+    for (i = 1; i <= nf; i++) {
+      if (substr($i, 1, 1) == QUOTECHAR) {
+        while (substr($i, length($i), 1) != QUOTECHAR) {
+         oi = $i;
+         getline;
+         i = 1;
+         nf = NF;
+         $i = oi "\x0a" $i;
+        }
+        $i = substr($i, 2, length($i) - 2);
+      }
+      $i = gensub("\x22\x22", "\x22", "g", $i);
+      $i = gensub("([\x22\x24\x5c\x5c\x60])", "\x5c\x5c\\1", "g", $i);
+      $i = gensub("\x0a", "\x22\x24\x27\x5c\x5c\x6e\x27\x22", "g", $i);
+      cell[nc] = $i;
+      nc++;
+    }
+
+    if (AH) {
+      # ignore lines starting with "#"
+      if (NC && $1 == "#") {
+        nr++;
+        next;
+      }
+      # headers line marker
+      if ($1 == "##") {
+        printf("headers=(");
+        for (i = 2; i < nc; i++) {
+          header[i] = tolower(gensub("[^[:alnum:]]", "_", "g", cell[i]));
+          printf(" %s", header[i]);
+        }
+        printf(" )\n");
+        headers_set = 1;
+        nr++;
+        next;
+      }
+      # all others values are ignored and not used
+    }
+
+    # printf("sheet=%d row=%d cols=%d ", ns, nr, nc) > "/dev/stderr";
+    printf("sheet=%d row=%d ", ns, nr);
+    for (i = (AH?2:1); i < nc; i++) {
+      if (AH && headers_set && header[i]) {
+        printf("%s=\x22%s\x22 ", header[i], cell[i]);
+      }
+      else if (AH && headers_set) {
+        # no header for this cell
+        printf("Warning: no header defined for cell at row %d and col %d\n", nr, i) > "/dev/stderr";
+      }
+      else {
+        # printf("cell_%d=\x22%s\x22 ", nc, $i) > "/dev/stderr";
+        printf("cell_%d=\x22%s\x22 ", i, cell[i]);
+      }
+    }
+    # printf("cols=%d\n", nc) > "/dev/stderr";
+    printf("\n");
+
+    nr++;
+  }
+  END {
+  }
+  '
+}
+
+usage() {
+  [[ $1 ]] && exec >&2
+  echo "Error: $1"
+  echo "Usage: ${0##*/} [OPTIONS] FILENAME"
+  echo "Options:"
+  echo "  --tsv              output as TSV format"
+  echo "  --detect-headers   search for headers ('##' markers) and use as colname"
+  echo "  --ignore-comments  ignore line starting with '#'"
+  return
+}
+
+# catdoc
+
+TSV=0
+AUTO_HEADERS=0
+NO_COMMENTS=0
+DELIMITER=$'\x16' # ' fix gedit parser
+QUOTECHAR=$'\x22' # ' fix gedit parser
+FORMFEED=$'\x18'  # ' fix gedit parser
+CHARSET="cp1252"
+
+IN2CSV_OPTS=(
+  --no-header-row
+  --quoting 1
+  --delimiter "$DELIMITER"
+  --quotechar "$QUOTECHAR"
+  --no-doublequote
+  --locale fr_FR
+  --datetime-format "%FT%D%Z"
+  --date-format "%F"
+)
+
+XLS2CSV_OPTS=(
+  -c"$DELIMITER"
+  -b"$FORMFEED"$'\n'  # ' fix gedit parser
+  -q3
+  -f"%FT%D%Z"
+  -g10
+  -x
+  -d"$CHARSET"
+)
+
+while (( $# > 0 )) ; do 
+  case "$1" in
+    -h|--help) usage; exit 0;;
+    --tsv) TSV=1 ;;
+    --detect-headers) AUTO_HEADERS=1 ;;
+    --ignore-comments) NO_COMMENTS=1 ;;
+    -*) usage "unknown parameter '$1'" && exit 99 ;;
+    *) ARGS+=( $1 ) ;;
+  esac
+  shift
+done
+
+source="${ARGS[0]}"
+
+if [[ -z "$source" ]]; then
+  usage "need FILENAME" && exit 99
+elif [[ ! -r "$source" ]]; then
+  usage "can't read '$source'" && exit 99
+fi
+
+if (( $TSV == 1 )); then
+  xls2csv "${XLS2CSV_OPTS[@]}" "$source" | csv2bash | while read -r; do
+    unset sheet row cols ${!cell_*} ${headers[*]}
+    eval "$REPLY"
+    echo -ne "$sheet\t$row"
+    for cell in ${!cell_*}; do
+      eval echo -n "\$'\\t'\"\${$cell//\$'\\n'/\\\\n}\""
+    done
+    echo
+  done
+else
+  xls2csv "${XLS2CSV_OPTS[@]}" "$source" | csv2bash
+fi
+# python3-csvkit
+# for sheet in $(in2csv --names "$source"); do
+#   in2csv --sheet "$sheet" "${IN2CSV_OPTS[@]}" "$filename"
+# done
+
+
