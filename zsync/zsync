@@ -207,7 +207,7 @@ function do_rsync() {
 
     local dry_run_format=' # %i %o %M %B %U:%G  /%f'
     local sync_format=' > %o /%f'
-    local tempfile=$(mktemp)
+    local tempfile=$(mktemp) || fatal "can't create temporary directory"
 
     for i in "${EXCLUDES[@]}"; do
         rsync_opts+=( --exclude "$i" )
