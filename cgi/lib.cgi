@@ -129,7 +129,8 @@ if [[ ${QUERY_STRING} ]]; then
   IFS='&' url_decode _GET_ "$QUERY_STRING"
 fi
 
-if [[ ${CONTENT_LENGTH} ]]; then
+if [[ ${CONTENT_TYPE} == application/x-www-form-urlencoded ]] &&
+   [[ ${CONTENT_LENGTH} ]]; then
   if (( ${CONTENT_LENGTH} < 8192 )); then
     IFS='&' url_decode _${REQUEST_METHOD}_ "$(cat)"
   else
@@ -137,6 +138,10 @@ if [[ ${CONTENT_LENGTH} ]]; then
     declare _TEMP_CONTENT_DATA=$(mktemp)
     cat > $_TEMP_CONTENT_DATA
   fi
+elif [[ ${CONTENT_LENGTH} ]] && (( $CONTENT_LENGTH > 0 )); then
+  # do not parse too long POST
+  declare _TEMP_CONTENT_DATA=$(mktemp)
+  cat > $_TEMP_CONTENT_DATA
 fi
 
 if [[ ${HTTP_COOKIE} ]]; then
