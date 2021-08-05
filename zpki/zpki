@@ -511,7 +511,7 @@ while (( $# > 0 )); do
     -C|--ca) BASEDIR=$2 ; shift ;;
     ## -y, --yes: valid all response
     -y|--yes) YES=1 ;;
-    ## -c, --cipher: Define cipher (none for no encryption)
+    ## -c, --cipher CIPHER: Define cipher for key (none for no encryption)
     -c|--cipher) CIPHER=$2 ; [[ $CIPHER == none ]] && unset CIPHER ; shift ;;
     # generic args
     --) shift ; break ;;
