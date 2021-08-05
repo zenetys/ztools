@@ -283,6 +283,7 @@ function create-csr() {
 #X-ACTION create-self CN|SUBJ [ALTNAMES...]: create self signed certificate
 function create-self() {
   local CRTFILE=${1:-$CRTFILE}
+  [[ $SUBJECT ]] || fatal "can't get create CA with empty subject"
   [[ $FORCE ]] && FORCE_CREATE_CRT=1 && unset FORCE
   is-exists -$FORCE_CREATE_CRT $CRTFILE && return 0
   yesno "create self-signed certificate '$SUBJECT' ($CRTFILE)?" || return
@@ -333,6 +334,7 @@ function create-cert() {
 #X-ACTION create-crt {CN|SUBJ} [ALTNAMES...]: create certificate
 function create-crt() {
   local CRTFILE=${1:-$CRTFILE}
+  [[ $SUBJECT ]] || fatal "can't get create cert with empty subject"
   [[ $FORCE ]] && FORCE_CREATE_CRT=1 && unset FORCE
   is-exists -$FORCE_CREATE_CRT "$CRTFILE" && return 0
   yesno "create certificate '$SUBJECT' ($CRTFILE) ?" || return
