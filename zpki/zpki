@@ -34,7 +34,7 @@ DEFAULT_CONFIG="
 default_ca             = default_ca_section
 
 [ default_ca_section ]
-dir                    = ${BASEDIR}
+dir                    = .
 certs                  = \$dir/certs
 new_certs_dir          = \$dir/certs.new
 crl_dir                = \$dir/crl
@@ -302,7 +302,7 @@ function create-self() {
   is-error "can't create auto-signed '$CRTFILE'" || return
 }
 
-#X-ACTION create-ca: create certificat authority & storage in BASEDIR
+#X-ACTION create-ca: create certificat authority & storage in current dir
 function create-ca() {
   local CNFFILE=$CA_CNFFILE
   local KEYFILE=$CA_KEYFILE
@@ -311,23 +311,17 @@ function create-ca() {
   local FORCE_CREATE_CRT # empty
   local SERIAL=$RANDOM$RANDOM$RANDOM
 
-  if [[ ! -d $CA_PATH ]]; then
-    yesno "Create CA storage directory '$CA_PATH'" ||
-      fatal "Can't create CA storage directory '$CA_PATH'"
-    mkdir -p $CA_PATH
-  fi
-
   create-cnf  "$CNFFILE" || return
   PASSWORD=$CA_PASSWORD create-key "$KEYFILE" || return
   PASSWORD=$CA_PASSWORD EXT="ca_ext" create-self "$CRTFILE" || return
-  [[ -d $CA_PATH/certs ]]      || mkdir $CA_PATH/certs
-  [[ -d $CA_PATH/certs.new ]]  || mkdir $CA_PATH/certs.new
-  [[ -d $CA_PATH/crl ]]        || mkdir $CA_PATH/crl
-  [[ -d $CA_PATH/private ]]    || mkdir $CA_PATH/private
-  [[ -e $CA_PATH/ca.idx ]]     || touch $CA_PATH/ca.idx
-  [[ -s $CA_PATH/ca.srl ]]     || printf "%016X\n" $SERIAL > $CA_PATH/ca.srl
-  [[ -s $CA_PATH/ca.crlnum ]]  || echo 01 > $CA_PATH/ca.crlnum
-  [[ -e $CA_PATH/.zpki ]]      || touch $CA_PATH/.zpki
+  [[ -d certs ]]      || mkdir certs
+  [[ -d certs.new ]]  || mkdir certs.new
+  [[ -d crl ]]        || mkdir crl
+  [[ -d private ]]    || mkdir private
+  [[ -e ca.idx ]]     || touch ca.idx
+  [[ -s ca.srl ]]     || printf "%016X\n" $SERIAL > ca.srl
+  [[ -s ca.crlnum ]]  || echo 01 > ca.crlnum
+  [[ -e .zpki ]]      || touch .zpki
   return 0
 }
 
@@ -354,7 +348,7 @@ function create-crt() {
   $OPENSSL ca "${PARAMS[@]}"
   is-error "can't sign request '$CSRFILE' to '$CRTFILE'" || return
 
-  ca-update-db $CRTFILE >> $CA_PATH/ca.idz
+  ca-update-db $CRTFILE >> ca.idz
 
 }
 
@@ -376,16 +370,16 @@ function ca-update-db() {
   fi
 
   $OPENSSL ca -config "$CA_CNFFILE" -updatedb
-  rm $CA_PATH/ca.idz.new
-  find $CA_PATH/certs.new -maxdepth 1 -type f -name "*.pem" | while read; do
-    ca-update-db $REPLY >> $CA_PATH/ca.idz.new
+  rm ca.idz.new
+  find certs.new -maxdepth 1 -type f -name "*.pem" | while read; do
+    ca-update-db $REPLY >> ca.idz.new
   done
-  mv -f $CA_PATH/ca.idz.new $CA_PATH/ca.idz
+  mv -f ca.idz.new ca.idz
 }
 
 #X-ACTION ca-list: list certificates store in CA
 function ca-list() {
-  local CA_IDXFILE=$CA_PATH/ca.idx
+  local CA_IDXFILE=ca.idx
   awk < $CA_IDXFILE '
   BEGIN {
     FS="\t";
@@ -543,10 +537,18 @@ declare -f $ACTION > /dev/null ||
 [[ $PASSWORD ]] && export PASSWORD
 [[ $CA_PASSWORD ]] && export CA_PASSWORD
 
-CA_PATH=${BASEDIR:-.}
-CA_KEYFILE=${BASEDIR:+$BASEDIR/}ca.key
-CA_CRTFILE=${BASEDIR:+$BASEDIR/}ca.crt
-CA_CNFFILE=${BASEDIR:+$BASEDIR/}ca.cnf
+if [[ $BASEDIR ]]; then
+  if [[ ! -d $BASEDIR ]]; then
+    yesno "Create CA storage directory '$BASEDIR'" ||
+      fatal "Can't create CA storage directory '$BASEDIR'"
+    mkdir -p $BASEDIR
+  fi
+  cd $BASEDIR
+fi
+
+CA_KEYFILE=ca.key
+CA_CRTFILE=ca.crt
+CA_CNFFILE=ca.cnf
 
 if [[ -r ${ARGS[0]} ]]; then
   # ARGV[0] is a filename
@@ -585,7 +587,7 @@ elif [[ $ACTION == create-ca ]]; then
   exit $?
 fi
 
-if [[ $BASEDIR && ! -e $CA_CRTFILE ]]; then
+if [[ ! -e $CA_CRTFILE ]]; then
   SUBJECT=${SUBJECT:-"/CN=Certificate Authority"} create-ca || exit $?
 fi
 
@@ -593,9 +595,9 @@ fi
 
 if [[ -e $CA_CRTFILE ]]; then
   CNFFILE=${CNFFILE:-$CA_CNFFILE}
-  KEYFILE=${KEYFILE:-$CA_PATH/private/$FILENAME.key}
-  CRTFILE=${CRTFILE:-$CA_PATH/certs/$FILENAME.crt}
-  CSRFILE=${CSRFILE:-$CA_PATH/certs/$FILENAME.csr}
+  KEYFILE=${KEYFILE:-private/$FILENAME.key}
+  CRTFILE=${CRTFILE:-certs/$FILENAME.crt}
+  CSRFILE=${CSRFILE:-certs/$FILENAME.csr}
 else
   KEYFILE=${KEYFILE:-$FILENAME.key}
   CNFFILE=${CNFFILE:-$FILENAME.cnf}
