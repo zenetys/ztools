@@ -523,7 +523,7 @@ done
 [[ -z ${ARGS[@]} ]] &&
   fatal --usage "need ACTION"
 
-ACTION=${ARGS[0]}; ARGS=( ${ARGS[@]:1} )
+ACTION=${ARGS[0]}; ARGS=( "${ARGS[@]:1}" )
 
 declare -f $ACTION > /dev/null ||
   fatal "undefine action '$ACTION'"
