@@ -208,7 +208,7 @@ function echo_quoted() {
 
 function openssl_debug() {
   local IFS=$'\n'
-  (( VERBOSE >= 1 )) && PREFIX="# openssl" echo_quoted "$@" >&2
+  (( VERBOSE >= 1 )) && PREFIX=": openssl" echo_quoted "$@" >&2
   ERRMSG=( $(openssl "$@" 2>&1) )
   return $?
 }
