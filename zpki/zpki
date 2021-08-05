@@ -386,24 +386,24 @@ function ca-list() {
   awk < $CA_IDXFILE '
   BEGIN {
     FS="\t";
-    printf("[\n");
+    printf("[");
   }
   function rfc3339(date) {
     ds = gensub("(..)", "\\1 ", "g", date)
     return (strftime("%Y-%m-%dT%H:%M:%S%z", mktime("20" ds)));
   }
   {
-    printf(" %s{",((NR==1)?"":","));
+    printf("%s\n {",((NR==1)?"":","));
     printf("\"status\":\"%s\"",$1);
     printf(",\"expiration\":\"%s\"", rfc3339($2));
     if ($3) printf(",\"revocation\":\"%s\"", rfc3339($3));
     printf(",\"serial\":\"%s\"", $4);
     # printf(",\"filename\":\"%s\"", $5);
     printf(",\"subject\":\"%s\"", $6);
-    printf("}\n");
+    printf("}");
   }
   END {
-    printf("]\n");
+    printf("\n]\n");
   }
   '
 }
