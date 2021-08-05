@@ -303,7 +303,7 @@ function create-self() {
   is-error "can't create auto-signed '$CRTFILE'" || return
 }
 
-#X-ACTION create-ca: create certificat authority & storage in current dir
+#X-ACTION create-ca CN|SUBJ: create certificat authority & storage
 function create-ca() {
   local CNFFILE=$CA_CNFFILE
   local KEYFILE=$CA_KEYFILE
