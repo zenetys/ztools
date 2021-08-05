@@ -7,10 +7,10 @@
 #
 
 # filename usage to determine action
-# zpki init
-# zpki create-key CNAME
-# zpki create-csr CNAME
-# zpki create-crt CNAME
+# zpki create-ca "CA-SUBJ"
+# zpki create-key "SUBJ"
+# zpki create-csr "SUBJ"
+# zpki create-crt "SUBJ"
 
 # directory tree :
 # .zpki             : ZPKI managed directory
