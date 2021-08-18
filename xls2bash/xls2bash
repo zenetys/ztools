@@ -59,13 +59,8 @@ csv2bash() {
     }
 
     if (AH) {
-      # ignore lines starting with "#"
-      if (NC && $1 == "#") {
-        nr++;
-        next;
-      }
       # headers line marker
-      if ($1 == "##") {
+      if (substr($1, 1, 2) == "##") {
         printf("headers=(");
         for (i = 2; i < nc; i++) {
           header[i] = tolower(gensub("[^[:alnum:]]", "_", "g", cell[i]));
@@ -73,6 +68,11 @@ csv2bash() {
         }
         printf(" )\n");
         headers_set = 1;
+        nr++;
+        next;
+      }
+      # ignore lines starting with "#"
+      if (NC && substr($1, 1, 1) == "#") {
         nr++;
         next;
       }
