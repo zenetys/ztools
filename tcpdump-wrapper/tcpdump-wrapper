@@ -1,0 +1,303 @@
+#!/bin/bash
+#
+##
+## Copyright (c) 2018-2019 Benoit DOLEZ - License MIT
+##
+## Permission is hereby granted, free of charge, to any person obtaining
+## a copy of this software and associated documentation files (the
+## "Software"), to deal in the Software without restriction, including
+## without limitation the rights to use, copy, modify, merge, publish,
+## distribute, sublicense, and/or sell copies of the Software, and to
+## permit persons to whom the Software is furnished to do so, subject to
+## the following conditions:
+##
+## The above copyright notice and this permission notice shall be
+## included in all copies or substantial portions of the Software.
+##
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+## EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+## MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+## NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+## LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+## OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+## WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+##
+## Author: Benoit DOLEZ <bdolez@ant-computing.com>
+## Author: Benoit DOLEZ <bdolez@zenetys.com>
+## Version: 1.0
+## Description: wrapper for tcpdump with optimal historized&rotated pcap files
+##
+#
+
+shopt -s extglob
+
+function log-exec() {
+  local IFS=''
+  local CMD=$1 ; shift
+  [[ $VERBOSE ]] && echo -E "EXEC: '$CMD${*/#/' '}'" >&2
+  [[ $DRYRUN ]] || "$CMD" "$@"
+  return $?
+}
+
+function log-no-exec() {
+  local IFS=''
+  local CMD=$1 ; shift
+  [[ $VERBOSE ]] && echo -E "INFO: '$CMD${*/#/' '}'" >&2
+  return 0
+}
+
+function version() {
+  local VERSION=$(sed -nr 's/^## Version: //p' "$0")
+  [[ $VERSION ]] && echo -n "${0##*/}-${VERSION}"
+  local COPYRIGHT=$(sed -nr 's/^## (Copyright )/\1/p' "$0")
+  [[ $COPYRIGHT ]] && echo -n " - $COPYRIGHT"
+  echo
+}
+
+function usage() {
+  local IFS=$'\t'
+  [[ $# -gt 0 ]] && echo "ERROR: $*" >&2
+  version >&2
+  echo "Usage: ${0##*/} [options] [tcpdump-options]" >&2
+  echo "Options:" >&2
+  sed -nr "s/^[[:space:]]*## (-[^:]+): /\1\t/p" "$0" |
+    while read OPT DESC ; do
+      printf " %-20s %s\n" "$OPT" "$DESC" >&2
+    done
+  return 0
+}
+
+function info() {
+  local IFS=' '
+  [[ $VERBOSE ]] && echo "INFO: $*" >&2
+  return 0
+}
+
+function fatal() {
+  local IFS=' '
+  echo "FATAL: $*" >&2
+  return 0
+}
+
+function error() {
+  local IFS=' '
+  echo "ERROR: $*" >&2
+  return 0
+}
+
+function onEXIT() {
+  local EXITCODE=$?
+  tcpdumpStop
+  return $EXITCODE
+}
+
+function tcpdumpStart() {
+  local IFS=''
+  local -a TCPDUMPOPTS=(
+    -i $IFACE
+    -w "$OUTPUT.pcap.1"
+    -C "${FILESIZE:-100M}"
+    -Z "${DUSER:-nobody}"
+    -s "${SNAPLEN:-0}"
+    # --packet-buffered
+    # -j /  # old chroot option
+    -nn
+    "${ARGS[@]}"
+  )
+  exec 2>&1 | tee -a $LOGFILE
+
+  echo "Command: 'tcpdump${TCPDUMPOPTS[*]/#/' '}'" >&2
+  log-exec /usr/sbin/tcpdump "${TCPDUMPOPTS[@]}"
+}
+
+function tcpdumpStop() {
+  echo "please, wait while stopping" >&2
+
+  # stop tcpdump
+  if [[ -r $PIDFILE ]] ; then
+    if kill -0 $(<$PIDFILE) 2>/dev/null ; then
+      kill $(<$PIDFILE)
+      sleep 1
+    fi
+    rm $PIDFILE
+  fi
+
+  # use a normalized filename
+  tcpdumpHistorize
+
+  # stop all jobs
+  JOBS=( $(jobs -p) )
+  if (( ${#JOBS[@]} > 0 )) ; then
+    wait ${JOBS[@]}
+  fi
+
+  # clean & compress before exit
+  tcpdumpCleanAndCompress
+
+  return 0
+}
+
+function tcpdumpHistorize() {
+  local IFS=$'\t'
+  local LAST
+
+  # get current open file
+  if [[ -e $PIDFILE ]] ; then
+    LAST=$(find /proc/$(<$PIDFILE)/fd/ -lname "${OUTPUT}.pcap.1*" -printf "%l\n")
+  fi
+
+  find ${OUTPUT%/*} -mindepth 1 -maxdepth 1 \
+        -name "${OUTPUT##*/}.pcap.1*" \
+        ${LAST:+\!$IFS-newer$IFS"$LAST"} \
+        -printf "%C+\t%T+\t%h\t%f\n" |
+    while read CTIME MTIME DIRNAME FILENAME ; do
+      [[ "$DIRNAME/$FILENAME" == "$LAST" ]] && continue
+      CTIME=${CTIME//[^0-9]}
+      MTIME=${MTIME//[^0-9]}
+
+      # output-filename
+      OUTFILE="${FILENAME%%.pcap.+([0-9])}"  # remove numbers ended string
+      OUTFILE="${OUTFILE}-${CTIME}-${MTIME}.pcap"
+
+      if [[ -e "$DIRNAME/$OUTFILE" ]] ; then
+        error "'$DIRNAME/$OUTFILE' already exist^s"
+        continue
+      fi
+      log-exec mv "$DIRNAME/$FILENAME" "$DIRNAME/$OUTFILE"
+    done
+  return 0
+}
+
+function tcpdumpCleanAndCompress {
+  local IFS=$'\t'
+
+  if (( SAVESIZE )) ; then
+    # remove file to be under the limit
+    find ${OUTPUT%/*} -name "${OUTPUT##*/}-*-*.pcap.gz" -type f |
+      sort | while read FILENAME ; do
+        IFS=" "
+        df=( $(df -kP "$FILENAME") )
+        if (( 100-${df[${#df[@]}-2]%\%} < SAVESIZE )) ; then
+          log-exec rm "$FILENAME"
+        else
+          break
+        fi
+      done
+  fi
+
+  # gzip normalized & uncompressed files
+  find ${OUTPUT%/*} -name "${OUTPUT##*/}-*-*.pcap" -type f |
+    while read FILENAME ; do
+      log-exec nice gzip -9 "$FILENAME"
+    done
+}
+
+# args are find args
+
+DUSER=${DUSER:-nobody}
+VERBOSE=${VERBOSE}
+XDEBUG=${XDEBUG}
+DRYRUN=${DRYRUN}
+SAVESIZE=${SAVESIZE}
+FINDARGS=( )
+FINDPATH=( )
+
+while [[ $# -gt 0 ]] ; do
+  case "$1" in
+    ## -h, --help: this help
+    -h|--help)   usage && exit 0 ;;
+    ## --verbose: enable verbose
+    --verbose)   VERBOSE=1 ;;
+    ## --x-debug: enable bash debug mode
+    --x-debug)   XDEBUG=1 ;;
+    ## --dry-run: view commands, do not execute
+    --dry-run)   DRYRUN=1 ; VERBOSE=1 ;;
+    ## --save SAVE%: save space up to SIZE percent of disk space
+    --save)      SAVESIZE=${2%\%} ; shift ;;
+    ## --no-save: disable auto remove older files
+    --no-save)   SAVESIZE=0 ;;
+    ## -C FILESIZE: rotate file after FILESIZE Mo
+    -C)          FILESIZE=$2 ; shift ;;
+    ## -i, --interface NAME: interface name (needed)
+    -i|--interface) IFACE="$2" ; shift ;;
+    ## -Z, --relinquish-privileges USER: user to switch to
+    -Z|--relinquish-privileges) DUSER=$2 ; shift ;;
+    ## -w FILENAME: raw output base name (auto suffix)
+    -s|--snapshot-length) SNAPLEN=$2 ; shift ;;
+    ## -s SNAPLEN: capture size per packet
+    -w)             OUTPUT="$2" ; shift ;;
+    ## ignore others arguments
+    --)          break ;;
+    ## store unknown args
+    *)           ARGS[${#ARGS[@]}]=$1 ;;
+  esac
+  shift
+done
+
+[[ $XDEBUG ]] && set -x
+
+[[ -z $OUTPUT ]] && fatal "argument output (-w) needed" && usage && exit 1
+[[ $OUTPUT =~ */* ]] && fatal "argument output (-w) needed to be absolute path" && usage && exit 1
+[[ -z $IFACE ]]  && fatal "argument iface (i) needed" && usage && exit 1
+
+[[ -d $OUTPUT || ${OUTPUT:${#OUTPUT}-1:1} == '/' ]] &&
+  OUTPUT="${OUTPUT%/}/$IFACE.pcap"
+
+OUTPUT=${OUTPUT%.pcap}
+LOGFILE=${OUTPUT}.log
+PIDFILE=${OUTPUT}.pid
+
+# create directory
+if [[ ! -d "${LOGFILE%/*}" ]] ; then
+  mkdir -p "${LOGFILE%/*}" ||
+    { fatal "can't create directory '${LOGFILE%/*}'" && exit 2 ; }
+  chown $DUSER "${LOGFILE%/*}" ||
+    { fatal "can't chowner of directory '${LOGFILE%/*}'" && exit 2 ; }
+fi
+
+# look for pid
+if [[ -e "$PIDFILE" ]] ; then
+  if kill -0 $(<"$PIDFILE") 2>/dev/null; then
+    # already started
+    echo "[INFO] Process already started (pid=$(<"$PIDFILE"))" >&2
+    exit 4
+  else
+    rm "$PIDFILE"
+  fi
+fi
+
+trap onEXIT EXIT
+
+tcpdumpStart &
+sleep 1
+
+if ! kill -0 $! 2>/dev/null; then
+  fatal "capture not started '$LOGFILE':"
+  tail "$LOGFILE" >&2
+  exit 1
+fi
+
+pid=$!
+echo $pid > "$PIDFILE"
+if [[ $(<"$PIDFILE") != $! ]] ; then
+  fatal "error with process, pidfile empty"
+  exit 3
+fi
+
+info "capture started with pid: $pid"
+info "check log '$LOGFILE'"
+
+while sleep 10 ; do
+  tcpdumpCleanAndCompress
+  [[ ! -r $PIDFILE ]] || ! kill -0 $(<$PIDFILE) 2>/dev/null && break
+done &
+
+while sleep 10 ; do
+  tcpdumpHistorize
+  [[ ! -r $PIDFILE ]] || ! kill -0 $(<$PIDFILE) 2>/dev/null && break
+done
+
+tcpdumpStop
+
+exit 0
+
