@@ -18,3 +18,9 @@ Options:
  -w FILENAME          raw output base name (auto suffix)
  -s SNAPLEN           capture size per packet
 </pre>
+
+## Example
+
+john@atchoum:~$ mkdir pcap
+john@atchoum:~$ sudo tcpdump-wrapper -w $HOME/pcap/eth0.pcap -C 100M -s 0 -Z $USER --save 10% -i eth0
+
