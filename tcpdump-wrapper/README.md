@@ -21,6 +21,7 @@ Options:
 
 ## Example
 
+<pre>
 john@atchoum:~$ mkdir pcap
 john@atchoum:~$ sudo tcpdump-wrapper -w $HOME/pcap/eth0.pcap -C 100M -s 0 -Z $USER --save 10% -i eth0
-
+</pre>
