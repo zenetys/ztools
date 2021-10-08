@@ -1,0 +1,621 @@
+#!/bin/bash
+#
+# Copyright (c) ZENETYS and contributors
+# License: MIT (https://opensource.org/licenses/MIT)
+# Authors: Benoit DOLEZ @ ZENETYS, Julien THOMAS @ ZENETYS
+#
+
+# vim: set tabstop=2 shiftwidth=2:
+
+set -f
+export LC_ALL=C
+declare -r PROGNAME=${0##*/}
+declare -r OIFS=$IFS
+
+if (( ${BASH_VERSION%%.*} < 4 )); then
+  echo "This script requires Bash >= 4" >&2
+  exit 2
+fi
+
+TARGETS=()
+VERBOSE=
+XDEBUG=
+COLOR=
+OUTPUT=
+CONFIG=
+MAX_PARALLEL=30
+MODULES=()
+
+case "$0" in
+  */*) MODULES_DIR=( "${0%/*}" ) ;;
+  *) MODULES_DIR=( '.' ) ;;
+esac
+
+# defaults applied after arguments parsing if empty
+DEFAULT_CREDENTIALS=() # modules may add entries
+DEFAULT_ALLOWED_NETWORKS=()
+CREDENTIALS=()
+ALLOWED_NETWORKS=()
+
+declare -r RENEW=86400
+declare -r MYIFS=$'\x16'
+declare -r QIFS=$'\x17'
+declare -A MEMORY_TTL
+declare -A MEMORY_VAL
+declare -a PQUEUE_CALLBACK_DEF
+declare -a PQUEUE_CALLBACK_LABEL
+declare -a PQUEUE_CALLBACK_POST
+declare -A PQUEUE_CALLBACKS
+declare -A PQUEUE=()
+SECONDS=$(date +%s) # start to now timestamp
+
+DNS_SERVER=
+HOST_ARGS=( -W 1 )
+FPING_ARGS=( -t 200 -i 10 -r 1 )
+
+function _fping() {
+  debug-exec -v 2 fping "${FPING_ARGS[@]}" "$@"
+}
+
+function _host() {
+  debug-exec -v 2 host "${HOST_ARGS[@]}" "$@" ${DNS_SERVER:+"$DNS_SERVER"} |
+    awk '/NXDOMAIN\)$|has no [^ ]+ record/ { print $0 >> "/dev/stderr"; next; }
+         { ok=1; print $0; }
+         END { exit(ok?0:1); }'
+}
+
+function exit_usage() {
+  local status=${1:-0}
+  local opt desc
+  [[ $status == 0 ]] || exec >&2
+  echo "\
+Usage: $PROGNAME [OPTION]... TARGET...
+Modular network scanner that dumps devices data for later processing
+
+Options:"
+  sed -nr 's/^[[:space:]]*## ([^:]*): /\1\t/p' -- "$0" |
+    while IFS=$'\t' read -r opt desc; do
+      printf '  %-25s %s\n' "$opt" "$desc"
+    done
+  exit "$status"
+}
+
+# Prepare CREDENTIALS to be array of <dst> <type> <kv-properties> entries
+# to ease and speed-up credentials evaluation.
+# The <kv-properties> is a declare -p output of a KV associative array
+# corresponding to the properties of the credential.
+function init_credentials() {
+  declare -A AREPLY
+  local IFS=$'\n'; credentials_lines="${CREDENTIALS[*]}"; IFS=$OIFS
+  local dst type spec line=0 i key value
+  CREDENTIALS=()
+
+  while read -r dst type spec; do
+    (( line++ ))
+    [[ -z $dst || $dst == \#* ]] && continue # empty or comment
+    AREPLY=() # reset
+
+    if [[ -n $dst && -z $type && -z $spec ]]; then
+      # short format, dst:type[:arg1]...
+      local IFS=:; i=( $dst ); IFS=$OIFS
+      if [[ -z ${i[0]} || -z ${i[1]} ]]; then
+        echo "Invalid credential #$line" >&2
+        continue
+      fi
+      dst=${i[0]}; type=${i[1]}
+      declare -f -F "credential-$type-norm" >/dev/null || continue
+      if ! "credential-$type-norm" "${i[@]:2}"; then
+        echo "Failed to normalize credential #$line ($type)" >&2
+        continue
+      fi
+    else
+      # long format, dst type [var=value]...
+      local IFS=$'\n'; spec=( $(echo "$spec" |xargs printf '%s\n') ); IFS=$OIFS
+      for i in "${spec[@]}"; do
+        key=${i%%=*}; [[ -z $key ]] && continue
+        [[ $i == "$key" ]] && value=1 || value=${i#*=}
+        AREPLY["$key"]=$value
+      done
+    fi
+    spec=$(declare -p AREPLY); spec=${spec#*=}
+    CREDENTIALS+=( "${dst}${MYIFS}${type}${MYIFS}${spec//$MYIFS}" )
+  done <<< "$credentials_lines"
+}
+
+# debug -v min-verbose -c [--] message...
+function debug() {
+  local min_verbose=1
+  local stack=1
+  # make sure with have standard IFS
+  local IFS=$OIFS
+  while (( $# > 0 )); do
+    case "$1" in
+      -v) min_verbose=$2; shift ;;
+      -c) (( stack++ )) ;;
+      --) shift; break ;;
+      *) break ;;
+    esac
+    shift
+  done
+  (( VERBOSE >= min_verbose )) || return 0
+  { echo -n "[DEBUG] [${HOSTNAME%%.*}:$BASHPID] "
+    (( VERBOSE >= 2 )) && echo -n "(${FUNCNAME[stack]}:${BASH_SOURCE[stack]##*/}:${BASH_LINENO[stack-1]}) "
+    echo "$*"
+  } >&2
+  return 0
+}
+
+function debug-exec() {
+  local v= ret qcmd
+  # make sure with have standard IFS
+  local IFS=$OIFS
+  [[ $1 == -v ]] && { v=$2; shift 2; }
+  printf -v qcmd '%q ' "$@"
+  debug ${v:+-v "$v"} -c "EXEC ${qcmd:0:${#qcmd}-1}"
+  "$@"; ret=$?
+  debug ${v:+-v "$v"} -c "RETURN $ret"
+  return "$ret"
+}
+
+# pqueue-register table [-n label] fct args... [--then-call fct args...]
+function pqueue-register() {
+  local table=$1 ; shift
+  local label=; [[ $1 == -n ]] && { label=$2; shift 2; }
+  local def=("$1"); shift; while [[ -n $1 && $1 != --then-call ]]; do def+=("$1"); shift; done
+  local post=(); [[ $1 == --then-call ]] && { shift; post+=( "$@" ); }
+  local cbid=${#PQUEUE_CALLBACK_DEF[@]}
+  local IFS=$MYIFS
+
+  PQUEUE_CALLBACK_DEF[$cbid]="${def[*]}"
+  PQUEUE_CALLBACK_LABEL[$cbid]="$label"
+  PQUEUE_CALLBACK_POST[$cbid]="${post[*]}"
+  PQUEUE_CALLBACKS[$table]+="${PQUEUE_CALLBACKS[$table]:+$IFS}${cbid}"
+}
+
+function pqueue-callback() {
+  local table=$1; shift
+  local IFS=$MYIFS
+  local cbid
+
+  # split callback list of ids with IFS
+  for cbid in ${PQUEUE_CALLBACKS[$table]} ; do
+    # pqueue-add queue-id cbid table key... -- args...
+    pqueue-add "$1" "$cbid" "$table" "$@"
+  done
+}
+
+function pqueue-add() {
+  local qid=$1; shift
+  local IFS=$MYIFS
+  PQUEUE["$qid"]+="${PQUEUE[$qid]:+$QIFS}$*"
+}
+
+function pqueue-run() {
+  (( ${#PQUEUE[@]} == 0 )) && { debug -v 2 'Queue is empty, nothing to run'; return 1; }
+  debug -v 2 'Run queue batch...'
+  declare -a pids=()
+  local qid
+  local qid_next
+  local pid
+
+  for qid in "${!PQUEUE[@]}"; do
+    # dequeue
+    qid_next=${PQUEUE["$qid"]%%$QIFS*}
+    if [[ ${PQUEUE["$qid"]} == *$QIFS* ]]; then
+      PQUEUE["$qid"]=${PQUEUE["$qid"]#*$QIFS}
+    else
+      unset 'PQUEUE[$qid]'
+    fi
+    # prepare
+    local IFS=$MYIFS
+    set -- $qid_next
+    local cbid=$1; shift
+    local table=$1; shift
+    declare -a key=(); while [[ -n $1 && $1 != -- ]]; do key+=("$1"); shift; done
+    [[ $1 == -- ]] && shift
+    declare -a args=( "$@" )
+    local label=${PQUEUE_CALLBACK_LABEL[$cbid]}
+    declare -a def=( ${PQUEUE_CALLBACK_DEF[$cbid]} )
+    declare -a post=( ${PQUEUE_CALLBACK_POST[$cbid]} )
+    IFS=$OIFS
+    local header="${label:-${def[0]}} $table ${key[*]}"
+    [[ -z $label && -n ${def[1]} ]] && header+=" ${def[*]:1}"
+    # run callbacks, def and post
+    (
+      declare -r JID=$BASHPID
+      exec 1>"$TMPDIR/$JID.out"
+      exec 2>"$TMPDIR/$JID.err"
+      function spoolcmd() {
+        local cmd
+        printf -v cmd '%q ' "$@"
+        echo "${cmd:0:${#cmd}-1}" >> "$TMPDIR/$JID.ctl"
+      }
+      function learn() { spoolcmd "$FUNCNAME" "$@"; }
+      function learned() { spoolcmd "$FUNCNAME" "$@"; }
+      REPLY=$(debug-exec -v 2 "${def[0]}" "$table" "${key[@]}" "${args[@]}" "${def[@]:1}")
+      if [[ -n $REPLY ]]; then
+        echo "<<<< $header >>>>"; echo "$REPLY"; echo
+        if [[ -n $REPLY && -n $post ]]; then
+          debug-exec -v 2 "${post[0]}" "$table" "${key[@]}" "${args[@]}" "${post[@]:1}"
+        fi
+      else
+        debug -v 2 "Skip section, nothing to print"
+      fi
+    ) &
+    pids+=( "$!" )
+    debug -v 2 "Section <<<< $header >>>> handled by pid ${pids[@]: -1}"
+    (( MAX_PARALLEL > 0 && ${#pids[@]} >= MAX_PARALLEL )) && break
+  done
+
+  debug -v 2 'Wait for jobs to complete...'
+  wait "${pids[@]}"
+  for pid in "${pids[@]}"; do
+    cat "$TMPDIR/$pid.err" >&2
+    cat "$TMPDIR/$pid.out"
+    [[ -s $TMPDIR/$pid.ctl ]] && source "$TMPDIR/$pid.ctl"
+    rm -f "$TMPDIR/$pid".{err,out,ctl}
+  done
+  return 0
+}
+
+# learn()
+# > pqueue-callback()
+#   > pqueue-add()
+#     > append in $PQUEUE array
+function learn() {
+  local table=$1 ; shift
+  local key=$1 ; shift
+  local IFS=$MYIFS
+
+  if [[ ${MEMORY_TTL[$table.$key]} ]] &&
+     (( RENEW+${MEMORY_TTL[$table.$key]} >= SECONDS )); then
+    debug -v 2 "Skip learn due to TTL, $table" $key ${@:+= "$@"}
+    return 0
+  fi
+
+  debug -v 2 -c "Learn $table" $key ${@:+= "$@"}
+  MEMORY_TTL[$table.$key]=$SECONDS
+  [[ $# != 0 ]] && MEMORY_VAL[$table.$key]="$*"
+  pqueue-callback "$table" $key -- "$@"
+}
+
+# learned (already-learned-)table (already-learned-)key
+#   [from (ttl-from-)table (ttl-from-key)]
+function learned() {
+  local dst_table=$1 ; shift
+  local dst_key=$1 ; shift
+  local ttl=
+  if [[ $1 == from ]]; then
+    shift
+    local src_table=$1; shift
+    local src_key=$1; shift
+    ttl=${MEMORY_TTL["$src_table.$src_key"]}
+  fi
+  local IFS=$MYIFS
+
+  debug -v 2 "Set as already learned, $dst_table" $dst_key
+  MEMORY_TTL["$dst_table.$dst_key"]=${ttl:-$SECONDS}
+}
+
+function cb-ipv4-fping() {
+  local table=$1; shift
+  local dst=$1; shift
+  local is_cidr=; [[ $dst == */* ]] && is_cidr=1
+  local ip misc
+
+  while read ip misc ; do
+    if [[ $misc == 'is alive' ]] ; then
+      echo "$ip $misc"
+      learn device "$ip"
+    fi
+  done < <(_fping ${is_cidr:+-g} "$dst")
+  return 0
+}
+
+function cb-resolve() {
+  local table=$1; shift
+  local key=$1; shift
+  local qtype=$1; shift
+
+  _host -t "${qtype^^}" "$key"
+}
+
+function cb-check-allowed-networks() {
+  local table=$1; shift
+  local dst=$1; shift
+  local m=${dst##*/}
+  if [[ $dst != "$m" && $m -lt 24 ]]; then
+    debug -v 0 "Skip scan of $dst, network too large"
+    return 1
+  fi
+  if ! is-in-allowed-networks "$dst"; then
+    debug -v 2 "Skip scan of $dst, not in ALLOWED_NETWORKS"
+    return 1
+  fi
+  learn "$table-allowed" "$dst"
+  return 0
+}
+
+function cb-find-credential() {
+  local table=$1; shift # ignored
+  local ip=$1; shift
+  local type=$1; shift
+  local learn_table="${1:-$type}"
+  local i cdata k
+  declare -A AREPLY
+
+  for (( i=0; i<${#CREDENTIALS[@]}; i++ )); do
+    # stop: do not continue trying to find a credential after a dst match
+    [[ ${AREPLY[stop]} ]] && break
+    local IFS=$MYIFS; cdata=( ${CREDENTIALS[i]} ); IFS=$OIFS # dst type spec
+    [[ ${cdata[1]} == $type ]] || continue # skip by type
+    [[ $ip == ${cdata[0]} ]] || continue # dst does not match glob pattern
+    eval "declare -A AREPLY=${cdata[2]}" # load kv properties, assume safe
+    if "credential-$type-check" "$ip"; then # check function can access AREPLY
+      for k in "${!AREPLY[@]}"; do echo "$k = ${AREPLY[$k]}"; done
+      learn "$learn_table" "$ip"
+      return 0
+    fi
+  done
+  debug -v 0 "No credential type $type for $ip"
+}
+
+# $1: module name
+# Module file path to load gets returned in $REPLY on success.
+function find-module() {
+  local i
+  for i in "${MODULES_DIR[@]}"; do
+    [[ -f $i/nscan-$1.inc ]] || continue
+    REPLY="$i/nscan-$1.inc"
+    return 0
+  done
+  return 1
+}
+
+function cat-single-file-script() {
+  local line i
+  while IFS= read -r line; do
+    if [[ $line == '# X-CONFIG' ]]; then
+      echo "$line BEGIN"
+      [[ -n $CONFIG ]] && cat "$CONFIG"
+      echo "$line END"
+    elif [[ $line == '# X-MODULES' ]]; then
+      echo "$line BEGIN"
+      for i in "${MODULES[@]}"; do
+        if find-module "$i"; then
+          echo "$line BEGIN $REPLY"
+          cat "$REPLY"
+          echo "$line END $REPLY"
+        fi
+      done
+      echo "$line END"
+    else
+      echo "$line"
+    fi
+  done < "$0"
+}
+
+# $@: command...
+function require-cmd() {
+  local path= i found
+  [[ $1 == --add-path ]] && { path=$2; shift 2; }
+  for i in "$@"; do
+    if [[ $i == */* ]]; then
+      found=$i
+    else
+      found=$(PATH="${PATH}${path:+:$path}" type -P "$i")
+    fi
+    [[ -n $found && -r $found ]] || { echo "Required command not found: $i" >&2; exit 2; }
+    [[ -x $found ]] || { echo "Required command not executable: $i" >&2; exit 2; }
+    hash -p "$found" "${i##*/}"
+  done
+  return 0
+}
+
+# is-in-net 10.109.21.100 10.109.21.0/24, return true
+# is-in-net 10.109.21.0/24 10.0.0.0/8 return true
+# is-in-net 10.109.21.154 10.109.21.154, return true
+# is-in-net 10.109.21.154/32 10.109.21.154/32, return true
+function is-in-net() {
+  local IFS='./'
+  local l=( $1 ); shift
+  local r=( $1 ); shift
+  [[ -z ${l[4]} ]] && l[4]=32
+  [[ -z ${r[4]} ]] && r[4]=32
+  local ldec rdec
+  (( ldec = (l[0]<<24) + (l[1]<<16) + (l[2]<<8) + (l[3]) ))
+  (( rdec = (r[0]<<24) + (r[1]<<16) + (r[2]<<8) + (r[3]) ))
+  (( (ldec >> (32-r[4])) == (rdec >> (32-r[4])) && l[4] >= r[4] ))
+}
+
+function is-ipv4() {
+  local IFS=.
+  set -- $1
+  (( $# == 4 )) &&
+    [[ -n $1 && -z ${1//[0-9]} && $1 -ge 0 && $1 -le 255 ]]
+    [[ -n $2 && -z ${2//[0-9]} && $2 -ge 0 && $2 -le 255 ]]
+    [[ -n $3 && -z ${3//[0-9]} && $3 -ge 0 && $3 -le 255 ]]
+    [[ -n $4 && -z ${4//[0-9]} && $4 -ge 0 && $4 -le 255 ]]
+}
+
+function is-ipv4-network() {
+  local m=${1##*/}
+  [[ $m == "$1" ]] && return 1
+  [[ -n $m && -z ${m//[0-9]} && $m -ge 0 && $m -le 32 ]] || return 1
+  is-ipv4 "${1%/*}" || return 1
+  return 0
+}
+
+function is-in-allowed-networks() {
+  local net
+  for net in "${ALLOWED_NETWORKS[@]}"; do
+    is-in-net "$1" "$net" && return 0
+  done
+  return 1
+}
+
+require-cmd awk date host mktemp sed
+require-cmd --add-path /usr/local/sbin:/usr/sbin:/sbin fping
+
+pqueue-register ipv4                    cb-check-allowed-networks
+pqueue-register ipv4-allowed            cb-ipv4-fping
+
+pqueue-register ipv4-network            cb-check-allowed-networks
+pqueue-register ipv4-network-allowed    cb-ipv4-fping
+
+pqueue-register device                  cb-resolve ptr
+
+save_args=( "$@" )
+shopt -s extglob
+while (( $# > 0 )); do
+  case "$1" in
+    ## -N, --network NET: Network allowed for scanning
+    -N|--network) ALLOWED_NETWORKS+=( ${2//,/$IFS} ); shift ;;
+    ## -c, --credential SPEC: Add credential rule
+    -c|--credential) CREDENTIALS+=( ${2//,/$IFS} ); shift ;;
+    ## -P, --parallel MAX: Maximum concurrent tasks or 0 for no limit
+    -P|--parallel) MAX_PARALLEL=$2; shift ;;
+    ## -m, --module NAME: Enable extra modules
+    -m|--module) MODULES+=( ${2//,/$IFS} ); shift ;;
+    ## -D, --dns IP: Set DNS server
+    -D|--dns) DNS_SERVER=$2; shift ;;
+    ## -f, --config FILE: Configuration file
+    -f|--config) CONFIG=$2; shift ;;
+    ## -o, --output FILE: Output file, default stdout
+    -o|--output) OUTPUT=$2; shift ;;
+    ## --bash CMD: Define bash command, eg: 'ssh gateway bash'
+    --bash) BASH_CMD=$2; shift ;;
+    ## -C, --color: Colorize stderr
+    -C|--color) COLOR=1 ;;
+    ## -h, --help: Display this help
+    -h|--help) exit_usage ;;
+    ## -v, --verbose: Increase verbosity
+    -+(v)) (( VERBOSE += ${#1}-1 )) ;;
+    --verbose) (( VERBOSE++ )) ;;
+    ## --x-debug: Enable bash debug mode
+    --x-debug) XDEBUG=1 ;;
+    -*) exit_usage 1 ;;
+    *) TARGETS+=( "$1" ) ;;
+  esac
+  shift
+done
+shopt -u extglob
+
+# X-MODULES
+if [[ -z $NSCAN_IS_BASH_CMD ]]; then
+  for i in "${MODULES[@]}"; do
+    find-module "$i" || { echo "Module not found: $i" >&2; exit 2; }
+    source "$REPLY" || { echo "Failed to source module: $i" >&2; exit 2; }
+  done
+fi
+
+# X-CONFIG
+if [[ -n $CONFIG && -z $NSCAN_IS_BASH_CMD ]] && ! source "$CONFIG"; then
+  echo "Failed to source configuration file $CONFIG" >&2
+  exit 2
+fi
+
+[[ -z $TARGETS ]] && exit_usage 1
+
+# redirect ouput before handing remote execution
+if [[ -n $OUTPUT && $OUTPUT != - && -z $NSCAN_IS_BASH_CMD ]]; then
+  exec > "$OUTPUT"
+fi
+
+# remote execution or custom bash
+if [[ -n $BASH_CMD && -z $NSCAN_IS_BASH_CMD ]]; then
+  { echo 'declare -rx NSCAN_IS_BASH_CMD=1'
+    declare -p save_args
+    echo 'set -- "${save_args[@]}"'
+    cat-single-file-script |tee "/tmp/$PROGNAME.bash.last"
+  } | $BASH_CMD
+
+  exit $?
+  # unrechable
+fi
+
+function pretty_stderr() {
+  while read -r; do
+    case "$REPLY" in
+      '[DEBUG] '*) echo -n $'\x1b[0;94m' ;;
+      *) echo -n $'\x1b[0;95m' ;;
+    esac
+    echo "$REPLY"$'\x1b[0m'
+  done >&2
+}
+
+if [[ -n $COLOR ]]; then
+  exec 2> >(pretty_stderr)
+fi
+
+if [[ -n $TMPDIR ]]; then declare -rx TMPDIR+="/$RPOGNAME.$RANDOM"
+elif [[ -d /dev/shm/. ]]; then declare -rx TMPDIR="/dev/shm/$PROGNAME.$RANDOM"
+elif [[ -d /var/tmp/. ]]; then declare -rx TMPDIR="/var/tmp/$PROGNAME.$RANDOM"
+else declare -rx TMPDIR="/tmp/$PROGNAME.$RANDOM"
+fi
+
+function on_exit() {
+  if [[ -n $TMPDIR && -d $TMPDIR/. ]]; then
+    # cleanup potential leftovers
+    find "$TMPDIR/" -mindepth 1 -maxdepth 1 -type f -delete
+    rmdir "$TMPDIR"
+  fi
+  if [[ -n $COLOR ]]; then
+    # make sure color is reset to normal
+    echo -n $'\x1b[0m' >&2
+  fi
+}
+
+mkdir -p "$TMPDIR" || { echo "Failed to create TMPDIR" >&2; exit 2; }
+trap on_exit EXIT
+
+for (( i=0; i<${#TARGETS[@]}; i++ )); do
+  if ! is-ipv4 "${TARGETS[i]}" && ! is-ipv4-network "${TARGETS[i]}"; then
+      # need an ip, try to resolve
+      REPLY=$(_host -t A "$i" |sed -nre 's/^.* has address (.+)$/\1/p;q')
+      if ! is-ipv4 "$REPLY"; then
+        echo "Failed resolve an IPv4 address from $i" >&2
+        continue
+      fi
+      TARGETS[i]=$REPLY
+  fi
+  if ! is-in-allowed-networks "${TARGETS[i]}"; then
+    ALLOWED_NETWORKS+=( "${TARGETS[i]}" )
+  fi
+done
+
+if [[ -z $CREDENTIALS ]]; then
+  CREDENTIALS=( "${DEFAULT_CREDENTIALS[@]}" )
+fi
+init_credentials
+
+for (( i=0; i<${#TARGETS[@]}; i++ )); do
+  debug -v 2 "TARGETS[$i] = ${TARGETS[i]}"
+done
+for (( i=0; i<${#ALLOWED_NETWORKS[@]}; i++ )); do
+  debug -v 2 "ALLOWED_NETWORKS[$i] = ${ALLOWED_NETWORKS[i]}"
+done
+for (( i=0; i<${#CREDENTIALS[@]}; i++ )); do
+  debug -v 2 "CREDENTIALS[$i] = ${CREDENTIALS[i]//$MYIFS/ }"
+done
+
+[[ -n $XDEBUG ]] && set -x
+
+for i in "${TARGETS[@]}"; do
+  learn ipv4-network "$i"
+done
+
+debug "pqueue-loop begins"
+runs=0
+overall_start_ts=$(date +%s%3N)
+start_ts=$overall_start_ts
+while pqueue-run; do
+  ((runs++))
+  end_ts=$(date +%s%3N)
+  elapsed=$(( end_ts - start_ts ))
+  debug "pqueue-run done in $elapsed ms"
+  start_ts=$end_ts
+done
+end_ts=$(date +%s%3N)
+elapsed=$(( end_ts - overall_start_ts ))
+debug "pqueue-loop done, $runs queue runs in $elapsed ms"
