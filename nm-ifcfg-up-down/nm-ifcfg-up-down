@@ -1,0 +1,104 @@
+#!/bin/bash
+#
+# Copyright (c) ZENETYS and contributors
+# License: MIT (https://opensource.org/licenses/MIT)
+# Author: Julien THOMAS @ ZENETYS
+#
+
+set -f
+DEVICE=$1
+ACTION=${2,,}
+[[ $ACTION != up && $ACTION != down ]] && exit 0
+
+function info() {
+    echo "$DEVICE/$ACTION: $*"
+}
+
+function error() {
+    echo "$DEVICE/$ACTION: $*" >&2
+}
+
+function log_exec() {
+    local ret
+    "$@"; ret=$?
+    case "$ret" in
+        0) info "EXEC: $* => $ret" ;;
+        *) error "EXEC: $* => $ret" ;;
+    esac
+    return $ret
+}
+
+# $1: file
+function get_ip_commands() {
+    REPLY=()
+    local x
+    while read -r x; do
+        # trim
+        x="${x#"${x%%[![:space:]]*}"}";
+        x="${x%"${x##*[![:space:]]}"}"
+        # skip empty
+        [[ -z $x ]] && continue
+        # skip comments
+        [[ $x == \#* ]] && continue
+        # safety
+        x="${x%%;*}"
+
+        REPLY+=( "$x" )
+    done < "$1"
+}
+
+# $@: ip route args
+function get_dev() {
+    local i on_dev=
+    REPLY=
+    for i in "$@"; do
+        [[ -n $on_dev ]] && { REPLY=$i; return 0; }
+        [[ $i == dev ]] || continue
+        on_dev=1
+    done
+    return 1
+}
+
+for i in "/etc/sysconfig/network-scripts/$DEVICE.route" \
+         "/etc/sysconfig/network-scripts/$DEVICE.rule"; do
+
+    [[ -e $i ]] || continue
+
+    # route vs rule
+    ip_object=${i##*.}
+
+    if ! get_ip_commands "$i"; then
+        error "failed to parse $i"
+        continue
+    fi
+
+    case $ip_object,$ACTION in
+        route,up) cat=cat; ip_action=replace ;; 
+        route,down) cat=tac; ip_action=delete ;;
+        rule,up) cat=cat; ip_action=add ;;
+        rule,down) cat=tac; ip_action=delete ;;
+        *) continue ;;
+    esac
+
+    seq=( $(seq 0 $(( ${#REPLY[@]}-1 )) |$cat) )
+    for s in "${seq[@]}"; do
+        ip_args=( ${REPLY[s]} )
+
+        if [[ $ip_object == route ]]; then
+            get_dev "${ip_args[@]}"
+            # default device is "our" $DEVICE
+            [[ -z $REPLY ]] && { REPLY=$DEVICE; ip_args+=( dev "$DEVICE" ); }
+            # routes are automatically removed when "our" $DEVICE goes down
+            [[ $ACTION == down && $REPLY == $DEVICE ]] && continue
+        fi
+
+        log_exec ip "$ip_object" "$ip_action" "${ip_args[@]}"
+    done
+done
+
+if [[ -e /etc/sysconfig/network-scripts/$DEVICE.$ACTION ]]; then
+    source "/etc/sysconfig/network-scripts/$DEVICE.$ACTION"
+fi
+
+# Make sure NM does not cancel anything if these actions fail.
+exit 0
