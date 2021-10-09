@@ -146,13 +146,13 @@ function show_diff() {
             warning "Too many text files for diff, display the first 10"
             continue
         fi
-    done < $tempfile
+    done < "$tempfile"
 
     if (( ${#ascii_files[@]} > 0 )); then
         # echo "ASCII : ${ascii_files[*]}" >&2
         local tempdir=$(mktemp -d) || fatal "can't create temporary directory"
-        mkdir -p $tempdir/old
-        ln -s / $tempdir/new
+        mkdir -p "$tempdir/old"
+        ln -s / "$tempdir/new"
         (
             IFS=$'\t'
             function do_remote() {
@@ -162,13 +162,13 @@ function show_diff() {
             echo "do_remote$IFS${ascii_files[*]}"
         ) |
             "${SSHCMD[@]}" $i "[[ -x $0 ]] && CMD='$0 --do-remote' || CMD='bash'; $SUDO_REMOTE \$CMD" |
-            tar zx -C $tempdir/old
+            tar zx -C "$tempdir/old"
         (
             cd $tempdir
             find old -type f -printf "%P\0" |
                 xargs -0 -l -I{} diff --unidirectional-new-file -u old/{} new/{}
         )
-        rm -rf $tempdir
+        rm -rf "$tempdir"
     fi
 }
 
@@ -219,7 +219,7 @@ function do_rsync() {
         if [[ -n $HAS_TTY ]]; then
             info "${DRY_RUN:+DRY-RUN }rsync to ${C[blue]}${i}${C[reset]}..."
 
-            rsync "${rsync_opts[@]}" --dry-run --out-format "$dry_run_format" "${INCLUDES[@]}" "$i:/" > $tempfile
+            rsync "${rsync_opts[@]}" --dry-run --out-format "$dry_run_format" "${INCLUDES[@]}" "$i:/" > "$tempfile"
             peer_retval=$?
 
             if (( peer_retval != 0 )); then
@@ -233,9 +233,9 @@ function do_rsync() {
             [[ -s $tempfile ]] || continue
 
             if [[ -n $DIFF ]]; then
-                show_diff $tempfile
+                show_diff "$tempfile"
             else
-                cat $tempfile
+                cat "$tempfile"
             fi
 
             # bypass in dry-run mode
@@ -256,7 +256,7 @@ function do_rsync() {
             retval=1
         fi
     done
-    rm -f $tempfile
+    rm -f "$tempfile"
     return "$retval"
 }
 
