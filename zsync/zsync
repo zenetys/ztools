@@ -222,7 +222,9 @@ function do_rsync() {
 
             if (( peer_retval != 0 )); then
                 error "Rsync to $i returned error code $peer_retval"
-                error "Try: ssh-copy-id${SSH_USER:+ -l "$SSH_USER"} ${SSH_IDENTITY:+-i "$SSH_IDENTITY"} -o StrictHostKeyChecking=ask $i"
+                if (( peer_retval == 255 )); then
+                    error "Try: ssh-copy-id${SSH_USER:+ -l "$SSH_USER"}${SSH_IDENTITY:+ -i "$SSH_IDENTITY"} -o StrictHostKeyChecking=ask $i"
+                fi
                 retval=1
                 continue
             fi
