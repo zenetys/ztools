@@ -143,7 +143,7 @@ function show_diff() {
            [[ $(file $file) =~ ASCII   ]]; then
             ascii_files+=( "$file" )
             (( ${#ascii_files[@]} > 10 )) &&
-            warning "Too many text files for diff, display the first 10"
+                warning "Too many text files for diff, display the first 10"
         fi
     done < "$tempfile"
 
