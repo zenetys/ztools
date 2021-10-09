@@ -22,6 +22,7 @@ TIMEOUT=10
 PEERS=()
 INCLUDES=()
 EXCLUDES=()
+USE_RSYNC_UPDATE= # set USE_RSYNC_UPDATE=1 in config to use rsync --update
 SUDO_REMOTE=""
 
 if tty -s >/dev/null 2>&1; then
@@ -192,7 +193,7 @@ function do_rsync() {
     local i retval=0 peer_retval
     local rsync_opts=(
         --archive # -rlptgoD
-        --update
+        ${USE_RSYNC_UPDATE:+--update}
         --one-file-system
         --compress
         --checksum
