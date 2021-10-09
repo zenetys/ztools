@@ -7,7 +7,6 @@
 export LC_ALL=C
 shopt -s nullglob
 set -o pipefail
-set -f
 
 PROGNAME=${0##*/}
 HOSTNAME=$(< /proc/sys/kernel/hostname)
@@ -334,8 +333,6 @@ SSHCMD=(
 for i in "${INCLUDES[@]}"; do
     if [[ ${i:0:1} != / ]]; then
         fatal "Expected absolute path for include '$i'"
-    elif [[ ! -e $i ]]; then
-        fatal "Include file '$i' does not exist"
     fi
 done
 
