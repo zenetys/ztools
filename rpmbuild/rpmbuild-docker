@@ -245,6 +245,12 @@ elif [[ -z $DIST ]]; then
   fi
 fi
 
+if [[ -f ~/.config/"${0##*/}/after-image.hook" ]] &&
+   ! source ~/.config/"${0##*/}/after-image.hook"; then
+    echo "FATAL: failed to source after-image.hook" >&2
+    exit 1
+fi
+
 # Extract type and version from $DIST for convenience
 DIST_VERSION=${DIST##*[!0-9]}
 DIST_TYPE=${DIST%$DIST_VERSION}
