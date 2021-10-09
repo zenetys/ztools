@@ -40,6 +40,12 @@ else
     HAS_TTY=
 fi
 
+if type -P colordiff >/dev/null; then
+    HAS_COLORDIFF=1
+else
+    HAS_COLORDIFF=
+fi
+
 function exit_usage() {
     local status=${1:-0}
     [[ "$status" != "0" ]] && exec >&2
@@ -165,7 +171,12 @@ function show_diff() {
         (
             cd $tempdir
             find old -type f -printf "%P\0" |
-                xargs -0 -l -I{} diff --unidirectional-new-file -u old/{} new/{}
+                xargs -0 -l -I{} diff --unidirectional-new-file -u old/{} new/{} |
+                if [[ -n $HAS_TTY && -n $HAS_COLORDIFF ]]; then
+                    colordiff
+                else
+                    cat
+                fi
         )
         rm -rf "$tempdir"
     fi
