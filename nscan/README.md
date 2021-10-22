@@ -42,15 +42,15 @@ Here is a good example on how to run nscan:
 $ nscan -C -v --bash 'ssh pif2-monitoring bash' -P 0 -m snmp -o data.nscan -N 10.21.0.0/16 -D 10.21.208.39 10.21.201.254
 ```
 
-* colorize stderr
-* set verbosity to level 1
+* colorize stderr,
+* set verbosity to level 1,
 * run nscan from host pif2-monitoring,
 * don't limit parallel tasks,
 * load extra module "snmp",
 * save output to data.nscan,
-* allow to scan discovered IP addresses if they belong to the 10.21.0.0/16 network
-* use DNS server 10.21.208.39 to find names
-* starts the scan by querying 10.21.201.254:
+* allow to scan discovered IP addresses if they belong to the 10.21.0.0/16 network,
+* use DNS server 10.21.208.39 to find names,
+* starts the scan by querying 10.21.201.254.
 
 ## Credentials
 
