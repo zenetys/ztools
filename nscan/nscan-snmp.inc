@@ -446,7 +446,7 @@ pqueue-register snmp-cisco -n 'x-snmp-vtp' \
 pqueue-register snmp-cisco -n 'x-snmp-cdpGlobalDeviceId' \
   cb-snmp get "$OID_cdpGlobalDeviceId"
 
-pqueue-register snmp-cisco -n 'x-snmp-OIDS_cdpCache' \
+pqueue-register snmp-cisco -n 'x-snmp-cdpCache' \
   cb-snmp walk "${OIDS_cdpCache[@]}"
 
 pqueue-register snmp-cisco -n 'x-snmp-vlanTrunkPort' \
