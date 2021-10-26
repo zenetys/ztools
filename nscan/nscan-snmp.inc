@@ -128,7 +128,10 @@ OIDS_vtp=(
   ${OID_vtpVlanName:=.1.3.6.1.4.1.9.9.46.1.3.1.1.4} # .<domain>.<vlan> = <name>
 )
 
-:  ${OID_cdpGlobalDeviceId:=.1.3.6.1.4.1.9.9.23.1.3.4.0}
+OIDS_cdpGlobal=(
+  #${OID_cdpGlobalDeviceId:=.1.3.6.1.4.1.9.9.23.1.3.4.0}
+  ${OID_cdpGlobal:=.1.3.6.1.4.1.9.9.23.1.3}
+)
 
 OIDS_cdpCache=(
   ${OID_cdpCacheAddress:=.1.3.6.1.4.1.9.9.23.1.2.1.1.4}
@@ -443,8 +446,8 @@ pqueue-register snmp-cisco -n 'x-snmp-vtp' \
   cb-snmp walk "${OIDS_vtp[@]}" --then-call \
     parse-cb-snmp-vtp
 
-pqueue-register snmp-cisco -n 'x-snmp-cdpGlobalDeviceId' \
-  cb-snmp get "$OID_cdpGlobalDeviceId"
+pqueue-register snmp-cisco -n 'x-snmp-cdpGlobal' \
+  cb-snmp walk "${OIDS_cdpGlobal[@]}"
 
 pqueue-register snmp-cisco -n 'x-snmp-cdpCache' \
   cb-snmp walk "${OIDS_cdpCache[@]}"
