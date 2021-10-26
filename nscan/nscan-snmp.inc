@@ -134,12 +134,15 @@ OIDS_cdpGlobal=(
 )
 
 OIDS_cdpCache=(
-  ${OID_cdpCacheAddress:=.1.3.6.1.4.1.9.9.23.1.2.1.1.4}
-  ${OID_cdpCacheDeviceId:=.1.3.6.1.4.1.9.9.23.1.2.1.1.6}
-  ${OID_cdpCacheDevicePort:=.1.3.6.1.4.1.9.9.23.1.2.1.1.7}
-  ${OID_cdpCachePlatform:=.1.3.6.1.4.1.9.9.23.1.2.1.1.8}
-  ${OID_cdpCacheCapabilities:=.1.3.6.1.4.1.9.9.23.1.2.1.1.9}
-  ${OID_cdpCacheNativeVLAN:=.1.3.6.1.4.1.9.9.23.1.2.1.1.11}
+  #${OID_cdpCacheAddressType:=.1.3.6.1.4.1.9.9.23.1.2.1.1.3}
+  #${OID_cdpCacheAddress:=.1.3.6.1.4.1.9.9.23.1.2.1.1.4}
+  #${OID_cdpCacheDeviceId:=.1.3.6.1.4.1.9.9.23.1.2.1.1.6}
+  #${OID_cdpCacheDevicePort:=.1.3.6.1.4.1.9.9.23.1.2.1.1.7}
+  #${OID_cdpCachePlatform:=.1.3.6.1.4.1.9.9.23.1.2.1.1.8}
+  #${OID_cdpCacheCapabilities:=.1.3.6.1.4.1.9.9.23.1.2.1.1.9}
+  #${OID_cdpCacheNativeVLAN:=.1.3.6.1.4.1.9.9.23.1.2.1.1.11}
+  #${OID_cdpCachePowerConsumption:=.1.3.6.1.4.1.9.9.23.1.2.1.1.15}
+  ${OID_cdpCache:=.1.3.6.1.4.1.9.9.23.1.2.1.1}
 )
 
 OIDS_vlanTrunkPort=(
