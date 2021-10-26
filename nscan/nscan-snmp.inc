@@ -326,10 +326,18 @@ function parse-cb-snmp-sys() {
   local sysoid
   sysoid=$(echo "$REPLY" |find-oid-val "$OID_sysObjectID")
   case "$sysoid" in
-    # branch on real cisco devices
-    .1.3.6.1.4.1.9.6.1.*) learn snmp-std "$ip" ;; # cisco smb
-    .1.3.6.1.4.1.9.*) learn snmp-cisco "$ip" ;; # cisco
-    *) learn snmp-std "$ip"
+    # branch on specific devices
+    .1.3.6.1.4.1.9.6.1.*) # cisco smb
+      learn snmp-std "$ip"
+      learn snmp-cisco-cdp "$ip"
+      ;;
+    .1.3.6.1.4.1.9.*) # cisco
+      learn snmp-cisco "$ip"
+      learn snmp-cisco-cdp "$ip"
+      ;;
+    *) # default
+      learn snmp-std "$ip"
+      ;;
   esac
 }
 
@@ -446,12 +454,6 @@ pqueue-register snmp-cisco -n 'x-snmp-vtp' \
   cb-snmp walk "${OIDS_vtp[@]}" --then-call \
     parse-cb-snmp-vtp
 
-pqueue-register snmp-cisco -n 'x-snmp-cdpGlobal' \
-  cb-snmp walk "${OIDS_cdpGlobal[@]}"
-
-pqueue-register snmp-cisco -n 'x-snmp-cdpCache' \
-  cb-snmp walk "${OIDS_cdpCache[@]}"
-
 pqueue-register snmp-cisco -n 'x-snmp-vlanTrunkPort' \
   cb-snmp walk "${OIDS_vlanTrunkPort[@]}"
 
@@ -466,3 +468,9 @@ pqueue-register snmp-cisco -n 'x-snmp-stackPort' \
 
 pqueue-register snmp-cisco-vlan \
   cb-snmp-cisco-fdb
+
+pqueue-register snmp-cisco-cdp -n 'x-snmp-cdpGlobal' \
+  cb-snmp walk "${OIDS_cdpGlobal[@]}"
+
+pqueue-register snmp-cisco-cdp -n 'x-snmp-cdpCache' \
+  cb-snmp walk "${OIDS_cdpCache[@]}"
