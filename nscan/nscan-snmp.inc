@@ -150,7 +150,6 @@ OIDS_vlanTrunkPort=(
   ${OID_vlanTrunkPortNativeVlan:=.1.3.6.1.4.1.9.9.46.1.6.1.1.5} # native vlan
   ${OID_vlanTrunkPortDynamicState:=.1.3.6.1.4.1.9.9.46.1.6.1.1.13} # administrative state
   ${OID_vlanTrunkPortDynamicStatus:=.1.3.6.1.4.1.9.9.46.1.6.1.1.14} # buggy for members of port channels
-  ${OID_vlanPortIslOperStatus:=.1.3.6.1.4.1.9.5.1.9.3.1.8} # prefer to vlanTrunkPortDynamicStatus if available
   ${OID_vlanTrunkPortVlansEnabled2k:=.1.3.6.1.4.1.9.9.46.1.6.1.1.17}
   ${OID_vlanTrunkPortVlansEnabled3k:=.1.3.6.1.4.1.9.9.46.1.6.1.1.18}
   ${OID_vlanTrunkPortVlansEnabled4k:=.1.3.6.1.4.1.9.9.46.1.6.1.1.19}
@@ -166,6 +165,7 @@ OIDS_pagpGroup=(
 
 OIDS_stackPort=(
   ${OID_stackPortIfIndex:=.1.3.6.1.4.1.9.5.1.4.1.1.11}
+  ${OID_vlanPortIslOperStatus:=.1.3.6.1.4.1.9.5.1.9.3.1.8} # prefer to vlanTrunkPortDynamicStatus if available
 )
 
 # Take snmpcmd output as input, return success if at least one oid value
