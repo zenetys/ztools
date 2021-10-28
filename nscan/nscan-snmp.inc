@@ -74,7 +74,7 @@ OIDS_dot1d=(
 )
 
 OIDS_dot1q=(
-  #${OID_dot1qVlanFdbId:=.1.3.6.1.2.1.17.7.1.4.2.1.3} # .<ignore>.<vlan> = <fdb-id> (usually equals)
+  ${OID_dot1qVlanFdbId:=.1.3.6.1.2.1.17.7.1.4.2.1.3} # .<ignore>.<vlan> = <fdb-id> (usually equals)
   ${OID_dot1qTpFdbPort:=.1.3.6.1.2.1.17.7.1.2.2.1.2} # .<fdb-id>.<mac> = <port>
   ${OID_dot1qVlanStaticName:=.1.3.6.1.2.1.17.7.1.4.3.1.1} # .<vlan> = <name>
   ${OID_dot1qPvid:=.1.3.6.1.2.1.17.7.1.4.5.1.1} # .<port> = <pvid>
