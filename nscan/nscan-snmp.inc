@@ -264,6 +264,7 @@ function credential-snmp-norm() {
 # Checker function for snmp credentials. When this function gets called,
 # KV properties of the credential to check are available in AREPLY.
 function credential-snmp-check() {
+  local ip=$1; shift
   local creds bulk i is_v3= has_context=
   case "${AREPLY[version]}:${AREPLY[bulk]}" in
     *:1) bulk=bulk ;;
