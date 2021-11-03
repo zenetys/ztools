@@ -61,6 +61,7 @@ OIDS_ifX=(
 )
 
 OIDS_dot3adAgg=(
+  # bug seen on C3850-48XS stackwize IOS XE 16.06.04a, return a zero value
   ${OID_dot3adAggPortSelectedAggID:=.1.2.840.10006.300.43.1.2.1.1.12}
 )
 
