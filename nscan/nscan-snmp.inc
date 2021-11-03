@@ -200,10 +200,11 @@ function _snmpcmd() {
   [[ $1 == -X ]] && { declare -A MEMORY_VAL=(); shift; } # mask memory
   local subcred=default vlan=;  [[ $1 == -V ]] && { subcred=vlan; vlan=$2; shift 2; }
   local cmd=$1; shift # get or walk
-  [[ $cmd == walk ]] && cmd="${MEMORY_VAL[credential.snmp.$ip.bulk]}${cmd}" # bulk only for walk
   local ip=$1; shift
+  local opts=( "${SNMP_ARGS[@]}" )
+  [[ $cmd == walk ]] && cmd="${MEMORY_VAL[credential.snmp.$ip.bulk]}${cmd}" # bulk only for walk
   local oids=(); while [[ -n $1 && $1 != -* ]]; do oids+=("$1"); shift; done
-  local opts=( "${SNMP_ARGS[@]}" ${MEMORY_VAL[credential.snmp.$ip.$subcred]//%vlan%/$vlan} "$@" )
+  opts+=( ${MEMORY_VAL[credential.snmp.$ip.$subcred]//%vlan%/$vlan} "$@" )
   debug-exec -v 2 "snmp$cmd" "${opts[@]}" "$ip" "${oids[@]}" > "$out" || { rm "$out"; return 1; }
   validate-snmp-data < "$out" || { rm "$out"; return 1; }
   rm "$out"
