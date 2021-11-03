@@ -78,6 +78,7 @@ function credential-sshpass-norm() {
 # KV properties of the credential to check are available in AREPLY.
 function credential-sshpass-check() { credential-ssh-check "$@"; }
 function credential-ssh-check() {
+  local ip=$1; shift
   local opts=() pass= out
 
   # allow per target timeout override
