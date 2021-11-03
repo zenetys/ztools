@@ -23,11 +23,12 @@ SSH_ARGS=(
   -o LogLevel=ERROR
 )
 
-# Usage: _ssh [-X] rest...
+# Usage: _ssh [-X] ip rest...
 # Option -X masks the memory
 function _ssh() {
   local IFS=$MYIFS
   [[ $1 == -X ]] && { declare -A MEMORY_VAL=(); shift; } # mask memory
+  local ip=$1; shift
   local SSHPASS=${SSHPASS:-${MEMORY_VAL[credential.ssh.$ip.pass]}}
   local cmd=( ${SSHPASS:+sshpass${IFS}-e} "$SSH" ) opts=()
   if [[ -n $SSHPASS ]]; then
@@ -38,7 +39,7 @@ function _ssh() {
             -o PubkeyAuthentication=yes )
   fi
   opts+=( "${SSH_ARGS[@]}" ${MEMORY_VAL[credential.ssh.$ip.opts]} "$@" )
-  SSHPASS="$SSHPASS" debug-exec -v 2 "${cmd[@]}" "${opts[@]}"
+  SSHPASS="$SSHPASS" debug-exec -v 2 "${cmd[@]}" "$ip" "${opts[@]}"
 }
 
 # Normalizer function for short form of ssh credentials
@@ -91,7 +92,7 @@ function credential-ssh-check() {
   done
 
   # use -X to disable memory for this _ssh call
-  out=$(SSHPASS="$pass" _ssh -X "${opts[@]}" "$ip" 'uname -a') || return 1
+  out=$(SSHPASS="$pass" _ssh -X "$ip" "${opts[@]}" 'uname -a') || return 1
   learn credential "ssh.$ip.opts" "${opts[@]}"
   learn credential "ssh.$ip.pass" "$pass"
   learn credential "ssh.$ip.uname" "$out"
