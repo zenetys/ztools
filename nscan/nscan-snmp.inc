@@ -169,6 +169,13 @@ OIDS_stackPort=(
   ${OID_vlanPortIslOperStatus:=.1.3.6.1.4.1.9.5.1.9.3.1.8} # prefer to vlanTrunkPortDynamicStatus if available
 )
 
+OIDS_ciscosbVlan=(
+  ${OID_ciscosbVlanPortModeState:=.1.3.6.1.4.1.9.6.1.101.48.22.1.1}
+  ${OID_ciscosbVlanTrunkPortModeNativeVlanId:=.1.3.6.1.4.1.9.6.1.101.48.61.1.1}
+  ${OID_ciscosbVlanAccessPortModeVlanId:=.1.3.6.1.4.1.9.6.1.101.48.62.1.1}
+  ${OID_ciscosbVlanCustomerPortModeVlanId:=.1.3.6.1.4.1.9.6.1.101.48.63.1.1}
+)
+
 # Take snmpcmd output as input, return success if at least one oid value
 # is found. Errors like "No Such..." are redirected to stderr.
 function validate-snmp-data() {
@@ -335,6 +342,7 @@ function parse-cb-snmp-sys() {
     # branch on specific devices
     .1.3.6.1.4.1.9.6.1.*) # cisco smb
       learn snmp-std "$ip"
+      learn snmp-cisco-smb "$ip"
       learn snmp-cisco-cdp "$ip"
       ;;
     .1.3.6.1.4.1.9.*) # cisco
@@ -474,6 +482,9 @@ pqueue-register snmp-cisco -n 'x-snmp-stackPort' \
 
 pqueue-register snmp-cisco-vlan \
   cb-snmp-cisco-fdb
+
+pqueue-register snmp-cisco-smb -n 'x-snmp-cisco-smb-vlan' \
+  cb-snmp walk "${OIDS_ciscosbVlan[@]}"
 
 pqueue-register snmp-cisco-cdp -n 'x-snmp-cdpGlobal' \
   cb-snmp walk "${OIDS_cdpGlobal[@]}"
