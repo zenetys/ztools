@@ -472,7 +472,8 @@ while (( $# > 0 )); do
     ## -N, --network NET: Network allowed for scanning
     -N|--network) ALLOWED_NETWORKS+=( ${2//,/$IFS} ); shift ;;
     ## -c, --credential SPEC: Add credential rule
-    -c|--credential) CREDENTIALS+=( ${2//,/$IFS} ); shift ;;
+    # do not split on comma, option must be repeated
+    -c|--credential) CREDENTIALS+=( "$2" ); shift ;;
     ## -P, --parallel MAX: Maximum concurrent tasks or 0 for no limit
     -P|--parallel) MAX_PARALLEL=$2; shift ;;
     ## -m, --module NAME: Enable extra modules
