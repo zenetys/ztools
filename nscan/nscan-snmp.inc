@@ -13,7 +13,7 @@ require-cmd snmpwalk
 require-cmd snmpbulkwalk
 require-cmd snmpget
 
-SNMP_TIMEOUT=0.7
+SNMP_TIMEOUT=2
 SNMP_RETRIES=1
 SNMP_ARGS=( -M '' -m '' -ObenUx --hexOutputLength=0 )
 
