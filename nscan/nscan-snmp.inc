@@ -176,6 +176,11 @@ OIDS_ciscosbVlan=(
   ${OID_ciscosbVlanCustomerPortModeVlanId:=.1.3.6.1.4.1.9.6.1.101.48.63.1.1}
 )
 
+OIDS_hwTrunk=(
+  ${OID_hwTrunkIfIndex:=.1.3.6.1.4.1.2011.5.25.41.1.3.3.1.4} # .<aggId> = ifIndex
+  ${OID_hwTrunkValidEntry:=.1.3.6.1.4.1.2011.5.25.41.1.4.1.1.2} # .<aggId>.<memberIfIndex>
+)
+
 # Take snmpcmd output as input, return success if at least one oid value
 # is found. Errors like "No Such..." are redirected to stderr.
 function validate-snmp-data() {
@@ -349,6 +354,9 @@ function parse-cb-snmp-sys() {
       learn snmp-cisco "$ip"
       learn snmp-cisco-cdp "$ip"
       ;;
+    .1.3.6.1.4.1.2011.2.239.*) # huawei dcswitch
+      learn snmp-huawei "$ip"
+      ;;
     *) # default
       learn snmp-std "$ip"
       ;;
@@ -491,3 +499,6 @@ pqueue-register snmp-cisco-cdp -n 'x-snmp-cdpGlobal' \
 
 pqueue-register snmp-cisco-cdp -n 'x-snmp-cdpCache' \
   cb-snmp walk "${OIDS_cdpCache[@]}"
+
+pqueue-register snmp-huawei -n 'x-snmp-hwTrunk' \
+  cb-snmp walk "${OIDS_hwTrunk[@]}"
