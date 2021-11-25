@@ -160,6 +160,19 @@ OIDS_vmTable=(
   ${OID_vmVlan:=.1.3.6.1.4.1.9.9.68.1.2.2.1.2} # access vlan
 )
 
+OIDS_vmTable_extended=(
+  # vmVlanType and vmVlans can be used to retrieve vlan membership information
+  # for Nexus FEX (vlanTrunkPort returns nothing for FEX interfaces).
+  # - 1(static) or 2(dynamic), single vlan, assume access: use vmVlan
+  # - 3(multiVlan), multiple vlans, assume trunk: use vmVlans* however
+  #   could not find a way to find out which is native vlan.
+  ${OID_vmVlanType:=.1.3.6.1.4.1.9.9.68.1.2.2.1.1}
+  ${OID_vmVlans:=.1.3.6.1.4.1.9.9.68.1.2.2.1.4}
+  ${OID_vmVlans2k:=.1.3.6.1.4.1.9.9.68.1.2.2.1.5}
+  ${OID_vmVlans3k:=.1.3.6.1.4.1.9.9.68.1.2.2.1.6}
+  ${OID_vmVlans4k:=.1.3.6.1.4.1.9.9.68.1.2.2.1.7}
+)
+
 OIDS_pagpGroup=(
   ${OID_pagpGroupIfIndex:=.1.3.6.1.4.1.9.9.98.1.1.1.1.8} # .ifIndex = ifIndex
 )
@@ -179,6 +192,11 @@ OIDS_ciscosbVlan=(
 OIDS_hwTrunk=(
   ${OID_hwTrunkIfIndex:=.1.3.6.1.4.1.2011.5.25.41.1.3.3.1.4} # .<aggId> = ifIndex
   ${OID_hwTrunkValidEntry:=.1.3.6.1.4.1.2011.5.25.41.1.4.1.1.2} # .<aggId>.<memberIfIndex>
+)
+
+OIDS_cefex=(
+  ${OID_cefexBindingExtenderIndex:=.1.3.6.1.4.1.9.9.691.1.1.1.1.2} # .<ifIndex> = <fexId>
+  ${OID_cefexConfigExtenderName:=.1.3.6.1.4.1.9.9.691.1.1.2.1.1} # .<fexId>.<fexName>
 )
 
 # Take snmpcmd output as input, return success if at least one oid value
@@ -350,6 +368,11 @@ function parse-cb-snmp-sys() {
       learn snmp-cisco-smb "$ip"
       learn snmp-cisco-cdp "$ip"
       ;;
+    .1.3.6.1.4.1.9.12.3.1.3.*) # target cisco nx but oid is for chassis
+      learn snmp-cisco "$ip"
+      learn snmp-cisco-cdp "$ip"
+      learn snmp-cisco-nexus "$ip"
+      ;;
     .1.3.6.1.4.1.9.*) # cisco
       learn snmp-cisco "$ip"
       learn snmp-cisco-cdp "$ip"
@@ -499,6 +522,12 @@ pqueue-register snmp-cisco-cdp -n 'x-snmp-cdpGlobal' \
 
 pqueue-register snmp-cisco-cdp -n 'x-snmp-cdpCache' \
   cb-snmp walk "${OIDS_cdpCache[@]}"
+
+pqueue-register snmp-cisco-nexus -n 'x-snmp-vm' \
+  cb-snmp walk "${OIDS_vmTable_extended[@]}"
+
+pqueue-register snmp-cisco-nexus -n 'x-snmp-cefex' \
+  cb-snmp walk "${OIDS_cefex[@]}"
 
 pqueue-register snmp-huawei -n 'x-snmp-hwTrunk' \
   cb-snmp walk "${OIDS_hwTrunk[@]}"
