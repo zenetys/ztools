@@ -48,6 +48,7 @@ OIDS_arp=(
 
 OIDS_if=(
   ${OID_ifDescr:=.1.3.6.1.2.1.2.2.1.2}
+  ${OID_ifType:=.1.3.6.1.2.1.2.2.1.3}
   ${OID_ifSpeed:=.1.3.6.1.2.1.2.2.1.5}
   ${OID_ifPhysAddress:=.1.3.6.1.2.1.2.2.1.6}
   ${OID_ifAdminStatus:=.1.3.6.1.2.1.2.2.1.7}
