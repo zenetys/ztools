@@ -1,0 +1,58 @@
+#!/bin/bash
+
+PROGNAME=${0##*/}
+DEFAULT_INDEX_PREFIX=json-rj_
+
+function exit_usage() {
+    local status=${1:-1}
+    [[ $status != 0 ]] && exec >&2
+    echo "\
+Usage: $PROGNAME JSON-FILE|- [INDEX]
+Inject JSON data to Elasticsearch
+
+Default index name if not given:
+    $DEFAULT_INDEX_PREFIX<YYYYMMDDHHMMSS>
+
+Usage example:
+    $ xzcat lotus-20220606-2220706.json.xz |
+        $PROGNAME - forcepoint-json-rj_lotus
+"
+    exit "$status"
+}
+
+while (( $# > 0 )); do
+    case "$1" in
+        -h|--help) exit_usage 0 ;;
+        *) break ;;
+    esac
+    shift
+done
+
+DATA="${1:-/dev/stdin}"
+INDEX="${2:-$DEFAULT_INDEX_PREFIX$(date +%Y%m%d%H%M%S)}"
+
+[[ -z $DATA ]] && exit_usage 1
+[[ -z $INDEX ]] && exit_usage 1
+
+[[ $DATA == - ]] && DATA=/dev/stdin
+
+jq -Mc . < "$DATA" |
+    # POST _bulk batches of 10MB max
+    while read -r; do
+        {
+            echo '{"index": {}}'
+            echo "$REPLY"
+            bytes=$(( ${#REPLY} + 1 + 14 ))
+            while read -r; do
+                echo '{"index": {}}'
+                echo "$REPLY"
+                (( bytes += (${#REPLY} + 1 + 14) ))
+                (( bytes > 10*1024*1024 )) && break
+            done
+        } |
+        es-curl "/$INDEX/_bulk" \
+            -X POST -H 'Content-Type: application/x-ndjson' \
+            --data-binary @-
+    done
+
+es-curl "/$INDEX/_refresh" -X POST
