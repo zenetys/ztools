@@ -378,6 +378,7 @@ function parse-cb-snmp-sys() {
       learn snmp-cisco-cdp "$ip"
       ;;
     .1.3.6.1.4.1.2011.2.239.*) # huawei dcswitch
+      learn snmp-std "$ip"
       learn snmp-huawei "$ip"
       ;;
     *) # default
