@@ -1,0 +1,86 @@
+#!/bin/bash
+
+[[ -r ~/.es ]] && source ~/.es
+
+# Usage: es-curl [URI] [CURLOPTS]...
+#
+# URI logic:
+#   - if URI does not include ://, $ES_BASE is used (eg: https://es-vip:9200)
+#   - if $ES_BASE is not set, it is constructed with the following logic:
+#     - protocol https is used, unless $ES_PROTO is set
+#     - host 127.0.0.1 is used, unless $ES_HOST is set
+#     - port 9200 is used, unless ES_PORT is set
+#   - if the first parameter begins with - (dash), we assume it is a curl
+#     option and URI / is used as default
+#
+# netrc logic:
+#   - if $ES_NETRC is set, pass --netrc-file $ES_NETRC to curl
+#   - otherwise if ~/.netrc.es exists, pass --netrc-file ~/.netrc.es to curl
+#   - otherwise if ~/.netrc exists, pass --netrc and --netrc-optional to curl
+#
+# curl insecure logic
+#   - if $ES_CACERT is set, pass --cacert $ES_CACERT to curl
+#   - otherwise if $ES_INSECURE is not set or set to 1, pass -k to curl
+#
+function es-curl() {
+    local curl_opts=(
+        -sS --connect-timeout "${CURL_CONNECT_TIMEOUT:-10}"
+        -H 'Content-Type: application/json'
+    )
+
+    if [[ -z "${ES_CURL_FAIL_WITH_BODY+defined}" || "$ES_CURL_FAIL_WITH_BODY" == '1' ]]; then
+        curl_opts+=( --fail-with-body )
+    else
+        curl_opts+=( -f )
+    fi
+
+    if [[ -n $ES_CACERT ]]; then
+        curl_opts+=( --cacert "$ES_CACERT" )
+    elif [[ -z "${ES_INSECURE+defined}" || "$ES_INSECURE" == '1' ]]; then
+        curl_opts+=( -k )
+    fi
+
+    if [[ -n $ES_NETRC ]]; then
+        curl_opts+=( --netrc-file "$ES_NETRC" )
+    elif [[ -r ~/.netrc.es ]]; then
+        curl_opts+=( --netrc-file ~/.netrc.es )
+    elif [[ -r ~/.netrc ]]; then
+        curl_opts+=( --netrc --netrc-optional )
+    fi
+
+    local url
+    if [[ $1 == *://* ]]; then
+        url=$1
+        shift
+    else
+        if [[ -n $ES_BASE ]]; then
+            url=$ES_BASE
+        else
+            local host=${ES_HOST:-127.0.0.1}
+            local port=${ES_PORT:-9200}
+            url="${ES_PROTO:-https}://$host:$port"
+        fi
+        [[ ${1:0:1} != '/' ]] && url+='/'
+        [[ ${1:0:1} != '-' ]] && { url+=$1; shift; }
+    fi
+
+    local cmd=( curl "${curl_opts[@]}" "${ES_CURL_OPTS[@]}" "$@" "$url" )
+    [[ -n $ES_DEBUG ]] && echo "DEBUG: es-curl: ${cmd[*]@Q}" >&2
+    "${cmd[@]}"
+}
+
+es-delete() { es-curl "$@" -XDELETE; }
+es-post() { es-curl "$@" -XPOST --data-binary @-; }
+es-put() { es-curl "$@" -XPUT --data-binary @-; }
+
+# done when sourced
+(return 0 2>/dev/null) && return 0
+
+PROGNAME=${0##*/}
+
+if [[ ${PROGNAME:0:3} == 'es-' ]] && declare -F -f "$PROGNAME" >/dev/null; then
+    "$PROGNAME" "$@"
+else
+    echo "FATAL: es-curl: Unsupported function $PROGNAME" >&2
+    exit 99
+fi
