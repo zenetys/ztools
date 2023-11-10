@@ -1,6 +1,11 @@
 #!/bin/bash
 
-[[ -r ~/.es ]] && source ~/.es
+for es_conf in ~/.es "${ES_CONFIG:-/etc/ztools/es.cfg}"; do
+    if [[ -r $es_conf ]]; then
+        source "$es_conf"
+        break
+    fi
+done
 
 # Usage: es-curl [URI] [CURLOPTS]...
 #
