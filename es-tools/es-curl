@@ -29,7 +29,7 @@ done
 #
 function es-curl() {
     local curl_opts=(
-        -sS --connect-timeout "${CURL_CONNECT_TIMEOUT:-10}"
+        -sS --connect-timeout "${ES_CURL_CONNECT_TIMEOUT:-10}"
         -H 'Content-Type: application/json'
     )
 
