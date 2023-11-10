@@ -318,6 +318,7 @@ function credential-snmp-check() {
     ${AREPLY[secName]:+-u "${AREPLY[secName]}"}
     ${AREPLY[privProtocol]:+-x "${AREPLY[privProtocol]}"}
     ${AREPLY[privPassword]:+-X "${AREPLY[privPassword]}"}
+    ${AREPLY[defaultPort]:+--defaultPort="${AREPLY[defaultPort]}"}
   )
   # use -X to disable memory for this _snmpcmd call
   if _snmpcmd -X "${bulk}walk" "$ip" "$OID_sysDescr" "${creds[@]}" >/dev/null; then
