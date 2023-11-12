@@ -46,6 +46,7 @@ declare OUTPUTDIR=$OUTPUTDIR
 declare PREBUILDSCRIPT=$PREBUILDSCRIPT
 declare DOWNLOAD=1
 declare RPMBUILDOPTS=()
+declare RPMSPECOPTS=()
 
 if [[ -n $VERBOSE ]] ; then
   ( IFS='' ; echo "[DEBUG] '${0}${*/#/' '}'" )
@@ -90,6 +91,7 @@ done
 [[ $XDEBUG == 1 ]] && set -x
 
 RPMBUILDOPTS+=( "$@" )
+RPMSPECOPTS+=( "$@" )
 
 declare SPECFILE=${ARGS[0]}
 [[ ${SPECFILE:0:1} != "/" ]] && SPECFILE=$PWD/$SPECFILE
@@ -398,8 +400,19 @@ EOF
     "/tmp/$PREBUILDSCRIPTFILE" || build_exit $?
   fi
 
+  rpmbuildopts=(
+    --define '_topdir /tmp/../tmp/../tmp'
+    --define "dist .$DIST"
+    "${RPMBUILDOPTS[@]}"
+  )
+  rpmspecopts=(
+    --define '_topdir /tmp/../tmp/../tmp'
+    --define "dist .$DIST"
+    "${RPMSPECOPTS[@]}"
+  )
+
   IFS=$'\n'
-  buildreq=( $(rpmspec -P "/tmp/$SPECFILE" |
+  buildreq=( $(rpmspec -P "/tmp/$SPECFILE" "${rpmspecopts[@]}" |
     sed -ne 's/^BuildRequires: *//p' |
     sed -re 's/(( +[^ ,]|[^ ,])*),/\1\n/g' |
     sed -re 's/^ *([^ ]( +[^ ]|[^ ])*) *$/\1/') )
@@ -410,7 +423,7 @@ EOF
 
   # download sources if needed
   if [[ $DOWNLOAD == 1 ]] ; then
-    dlsources=( $(rpmspec -P "/tmp/$SPECFILE" |
+    dlsources=( $(rpmspec -P "/tmp/$SPECFILE" "${rpmspecopts[@]}" |
       sed -nr -e 's,^(source|patch)[0-9]*\s*:\s*(\S+).*,\2,i;T;/:\/\//p') )
     for i in "${dlsources[@]}"; do
         RUNAS="$BUSER" build_dl "$i" /tmp/SOURCES || build_exit $?
@@ -419,8 +432,7 @@ EOF
 
   # Having _topdir /tmp causes problems in el6/el7 because it is not long enough
   # https://access.redhat.com/solutions/1426113
-  build_runas "$BUSER" rpmbuild --define '_topdir /tmp/../tmp/../tmp' \
-    --define "dist .$DIST" "${RPMBUILDOPTS[@]}" -ba "/tmp/$SPECFILE" ||
+  build_runas "$BUSER" rpmbuild "${rpmbuildopts[@]}" -ba "/tmp/$SPECFILE" ||
       build_exit $?
 
   if [[ -n $REPO && -n $UPDATE ]] ; then
@@ -437,7 +449,7 @@ CTNAME="build_${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
 DOCKER_OPTS+=( --name "$CTNAME" -i --rm )
 trap 'docker kill "$CTNAME"; exit;' INT
 cat <<__EOF__ |docker run "${DOCKER_OPTS[@]}" "$IMAGE" /bin/bash &
-$(declare -p BGROUP BHOME BUSER DIST DIST_TYPE DIST_VERSION DOWNLOAD KEEP NOKEEP PREBUILDSCRIPTFILE REPO RPMBUILDOPTS SPECFILE UPDATE)
+$(declare -p BGROUP BHOME BUSER DIST DIST_TYPE DIST_VERSION DOWNLOAD KEEP NOKEEP PREBUILDSCRIPTFILE REPO RPMBUILDOPTS RPMSPECOPTS SPECFILE UPDATE)
 $(declare -f build_exit)
 $(declare -f build_runas)
 $(declare -f build_dl)
