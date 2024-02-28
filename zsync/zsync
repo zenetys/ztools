@@ -281,9 +281,18 @@ function do_rsync() {
     return "$retval"
 }
 
+function do_keyscan() {
+    local i
+    for i in "${PEERS[@]}"; do
+        peer_is_myself "$i" && continue
+        ssh-keyscan "${i#*@}"
+    done
+}
+
 peers=()
 includes=()
 excludes=()
+keyscan=
 argv=( "$@" )
 
 while (( $# > 0 )); do
@@ -298,6 +307,7 @@ while (( $# > 0 )); do
         -e|--exclude) excludes+=( "$2" ); shift ;;
         --do-remote) do_remote; exit $? ;;
         --do-rsync)  do_remote_rsync "${@:2}"; exit $? ;;
+        --do-keyscan) keyscan=1 ;;
         -h|--help) exit_usage ;;
         --) shift; break ;;
         -*) exit_usage 1 ;;
@@ -335,6 +345,11 @@ fi
 
 [[ $SSH_IDENTITY && ! -r $SSH_IDENTITY ]] &&
   fatal "Cannot read SSH identity '$SSH_IDENTITY'"
+
+if [[ -n $keyscan ]]; then
+    do_keyscan
+    exit $?
+fi
 
 SSHCMD=(
     ssh -T
