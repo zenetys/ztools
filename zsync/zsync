@@ -355,6 +355,7 @@ SSHCMD=(
     ssh -T
     ${SSH_USER:+-l "$SSH_USER"}
     ${SSH_IDENTITY:+-o IdentityFile="$SSH_IDENTITY"}
+    ${SSH_LOGLEVEL:+-o LogLevel="$SSH_LOGLEVEL"}
     -o ConnectTimeout=$TIMEOUT
     -o IdentitiesOnly=yes
     -o BatchMode=no
