@@ -169,7 +169,7 @@ function show_diff() {
             "${SSHCMD[@]}" $i "[[ -x $0 ]] && CMD='$0 --do-remote' || CMD='bash'; $SUDO_REMOTE \$CMD" |
             tar zx -C "$tempdir/old"
         (
-            cd $tempdir
+            cd "$tempdir"
             find old -type f -printf "%P\0" |
                 xargs -0 -l -I{} diff --unidirectional-new-file -u old/{} new/{} |
                 if [[ -n $HAS_TTY && -n $HAS_COLORDIFF ]]; then
