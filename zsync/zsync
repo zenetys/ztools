@@ -135,6 +135,15 @@ function confirm() {
     fi
 }
 
+# $1: PEERS entry
+function peer_is_myself() {
+    local short_peer_host
+    short_peer_host=${1#*@}
+    short_peer_host=${short_peer_host%%.*}
+    [[ $short_peer_host == $HOSTNAME ]] && return 0
+    return 1
+}
+
 function show_diff() {
     local difflist=$1 ; shift
     local hash action mtime owner file
@@ -225,7 +234,7 @@ function do_rsync() {
 
     for i in "${PEERS[@]}"; do
         # bypass myself
-        [[ ${i#*@} == $HOSTNAME ]] && continue
+        peer_is_myself "$i" && continue
         if [[ -n $HAS_TTY ]]; then
             info "${DRY_RUN:+DRY-RUN }rsync to ${C[blue]}${i}${C[reset]}..."
 
