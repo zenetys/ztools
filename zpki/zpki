@@ -1,5 +1,5 @@
 #!/bin/bash
-# 
+#
 # License: MIT License
 # Author: Benoit DOLEZ <bdolez@zenetys.com>
 # Copyright: 2020
@@ -75,7 +75,7 @@ x509_extensions        = x509v3_ext
 authorityKeyIdentifier = keyid:always
 
 [ distinguished_name ]
-countryName            = Country Name 
+countryName            = Country Name
 localityName           = Locality Name (eg, city)
 0.organizationName     = Organization Name (eg, company)
 organizationalUnitName = Organizational Unit Name (eg, section)
@@ -350,9 +350,7 @@ function create-crt() {
   )
   $OPENSSL ca "${PARAMS[@]}"
   is-error "can't sign request '$CSRFILE' to '$CRTFILE'" || return
-
-  ca-update-db $CRTFILE >> ca.idz
-
+  ca-update-db "$CRTFILE" >> ca.idz
 }
 
 function ca-update-db() {
@@ -360,7 +358,8 @@ function ca-update-db() {
     local CRTFILE=$1
     local IFS=$'\n'
     local hash serial notBefore notAfter subject issuer email
-    for A in hash=$(openssl x509 -in $CRTFILE -noout -hash -serial -startdate -enddate -email -subject -issuer); do
+    for A in hash=$(openssl x509 -in "$CRTFILE" -noout -hash -serial \
+                        -startdate -enddate -email -subject -issuer); do
       eval "${A%%=*}='${A#*=}'"
     done
     subject="/${subject//, /\/}"; subject="${subject// = /=}"
@@ -369,7 +368,6 @@ function ca-update-db() {
          $(date -Iseconds -d "$notBefore") $(date -Iseconds -d "$notAfter") \
          "$subject" "$issuer" "$email"
     return
-
   fi
 
   $OPENSSL ca -config "$CA_CNFFILE" -updatedb
@@ -446,7 +444,7 @@ function ca-revoke-crt() {
   COMMON_NAME=${SUBJECT##*/CN=}
   COMMON_NAME=${COMMON_NAME%%,*}
   yesno "Revoke certificate '$SUBJECT' ($CRTFILE)" || return
-  
+
   PARAMS=(
     -config "$CA_CNFFILE"
     -batch
@@ -609,5 +607,3 @@ else
 fi
 
 $ACTION
-
-
