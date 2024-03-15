@@ -346,7 +346,7 @@ function create-crt() {
     -out "$CRTFILE"
     -days "$NUMDAYS"
     -extensions ${EXT:-x509v3_ext}
-    ${PASSWORD:+-passin env:CA_PASSWORD}
+    ${CA_PASSWORD:+-passin env:CA_PASSWORD}
   )
   $OPENSSL ca "${PARAMS[@]}"
   is-error "can't sign request '$CSRFILE' to '$CRTFILE'" || return
@@ -450,7 +450,7 @@ function ca-revoke-crt() {
     -batch
     -revoke "$CRTFILE"
     -gencrl
-    ${PASSWORD:+-passin env:CA_PASSWORD}
+    ${CA_PASSWORD:+-passin env:CA_PASSWORD}
   )
   $OPENSSL ca "${PARAMS[@]}"
   is-error "can't revoke certificate '$SUBJECT'" || return
