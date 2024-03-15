@@ -429,7 +429,7 @@ function ca-update-crt() {
     fatal "can't get subject in CSR '$CSRFILE'"
   yesno "Are you sure to update (revoke/sign) '$SUBJECT'" || return
   YES=1 ca-revoke-crt "$CRTFILE"
-  YES=1 ca-sign-csr "$CSRFILE"
+  YES=1 FORCE_CREATE_CRT=1 ca-sign-csr "$CSRFILE"
   return 0
 }
 
@@ -507,6 +507,8 @@ while (( $# > 0 )); do
     -q|--quiet) ((VERBOSE=0)) ;;
     ## -C, --ca: Set current CA base directory
     -C|--ca) BASEDIR=$2 ; shift ;;
+    ## -Fcsr: Regenerate CSR even if exists (eg: change in SANs)
+    -Fcsr) FORCE_CREATE_CSR=1 ;;
     ## -y, --yes: valid all response
     -y|--yes) YES=1 ;;
     ## -c, --cipher CIPHER: Define cipher for key (none for no encryption)
