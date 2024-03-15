@@ -217,7 +217,7 @@ function is-exists() {
   local FORCE
   [[ ${1:0:1} == - ]] && FORCE=${1:1} && shift
   if [[ -s $1 && ! ${FORCE} ]] ; then
-    (( VERBOSE >= 2 )) && echo "$1: already exists, bypass" >&2
+    (( VERBOSE >= 1 )) && echo "$1: already exists, bypass" >&2
     return 0
   fi
   return 1
