@@ -292,7 +292,7 @@ function create-self() {
   PARAMS=(
     -batch
     -new -x509
-    -days $NUMDAYS
+    -days "$NUMDAYS"
     -out "$CRTFILE"
     -key "$KEYFILE"
     ${SUBJECT:+-subj "$SUBJECT"}
@@ -344,7 +344,7 @@ function create-crt() {
     -batch
     -in  "$CSRFILE"
     -out "$CRTFILE"
-    -days $NUMDAYS
+    -days "$NUMDAYS"
     -extensions ${EXT:-x509v3_ext}
     ${PASSWORD:+-passin env:CA_PASSWORD}
   )
@@ -372,8 +372,8 @@ function ca-update-db() {
 
   $OPENSSL ca -config "$CA_CNFFILE" -updatedb
   rm ca.idz.new
-  find certs.new -maxdepth 1 -type f -name "*.pem" | while read; do
-    ca-update-db $REPLY >> ca.idz.new
+  find certs.new -maxdepth 1 -type f -name "*.pem" | while read -r; do
+    ca-update-db "$REPLY" >> ca.idz.new
   done
   mv -f ca.idz.new ca.idz
 }
@@ -424,12 +424,12 @@ function ca-sign-csr() {
 function ca-update-crt() {
   local CRTFILE=${1:-$CRTFILE}
   local CSRFILE=${CSRFILE:-${CRTFILE%.crt}.csr}
-  SUBJECT=$(openssl req -in $CSRFILE -subject -noout)
+  SUBJECT=$(openssl req -in "$CSRFILE" -subject -noout)
   [[ ${SUBJECT:0:8} == "subject=" ]] && SUBJECT=${SUBJECT:8} ||
     fatal "can't get subject in CSR '$CSRFILE'"
   yesno "Are you sure to update (revoke/sign) '$SUBJECT'" || return
-  YES=1 ca-revoke-crt $CRTFILE
-  YES=1 ca-sign-csr $CSRFILE
+  YES=1 ca-revoke-crt "$CRTFILE"
+  YES=1 ca-sign-csr "$CSRFILE"
   return 0
 }
 
@@ -526,7 +526,7 @@ done
 
 ACTION=${ARGS[0]}; ARGS=( "${ARGS[@]:1}" )
 
-declare -f $ACTION > /dev/null ||
+declare -f "$ACTION" > /dev/null ||
   fatal "undefine action '$ACTION'"
 
 ####################################################
@@ -606,4 +606,4 @@ else
   CSRFILE=${CSRFILE:-$FILENAME.csr}
 fi
 
-$ACTION
+"$ACTION"
