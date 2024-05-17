@@ -200,6 +200,8 @@ OIDS_cefex=(
   ${OID_cefexConfigExtenderName:=.1.3.6.1.4.1.9.9.691.1.1.2.1.1} # .<fexId>.<fexName>
 )
 
+OID_ciscoSB=.1.3.6.1.4.1.9.6.1
+
 # Take snmpcmd output as input, return success if at least one oid value
 # is found. Errors like "No Such..." are redirected to stderr.
 function validate-snmp-data() {
@@ -376,8 +378,7 @@ function parse-cb-snmp-sys() {
       learn snmp-cisco-nexus "$ip"
       ;;
     .1.3.6.1.4.1.9.*) # cisco
-      learn snmp-cisco-std "$ip"
-      learn snmp-cisco-cdp "$ip"
+      learn snmp-cisco "$ip"
       ;;
     .1.3.6.1.4.1.2011.2.239.*) # huawei dcswitch
       learn snmp-std "$ip"
@@ -412,6 +413,20 @@ function parse-cb-snmp-vtp() {
   done < <(echo "$REPLY" |
     extract-snmp-data "$OID_vtpVlanName" '\.1\.([0-9]+) = .*' '\1' |
     sort -un)
+}
+
+# $@: cb-snmp arguments
+function parse-cb-snmp-cisco-check-sb() {
+  local table=$1; shift
+  local ip=$1; shift
+  if [[ $REPLY == $OID_ciscoSB.*\ =\ * ]]; then
+    learn snmp-std "$ip"
+    learn snmp-cisco-smb "$ip"
+    learn snmp-cisco-cdp "$ip"
+  else
+    learn snmp-cisco-std "$ip"
+    learn snmp-cisco-cdp "$ip"
+  fi
 }
 
 function cb-snmp-cisco-fdb() {
@@ -490,6 +505,10 @@ pqueue-register snmp-std -n 'x-snmp-dot1d' \
 
 pqueue-register snmp-std -n 'x-snmp-dot1q' \
   cb-snmp walk "${OIDS_dot1q[@]}"
+
+pqueue-register snmp-cisco -n 'x-snmp-cisco-check-sb' \
+  cb-snmp getnext "$OID_ciscoSB" --then-call \
+    parse-cb-snmp-cisco-check-sb
 
 pqueue-register snmp-cisco-std -n 'x-snmp-netDefaultGateway' \
   cb-snmp get "$OID_netDefaultGateway" --then-call \
