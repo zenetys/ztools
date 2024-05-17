@@ -371,12 +371,12 @@ function parse-cb-snmp-sys() {
       learn snmp-cisco-cdp "$ip"
       ;;
     .1.3.6.1.4.1.9.12.3.1.3.*) # target cisco nx but oid is for chassis
-      learn snmp-cisco "$ip"
+      learn snmp-cisco-std "$ip"
       learn snmp-cisco-cdp "$ip"
       learn snmp-cisco-nexus "$ip"
       ;;
     .1.3.6.1.4.1.9.*) # cisco
-      learn snmp-cisco "$ip"
+      learn snmp-cisco-std "$ip"
       learn snmp-cisco-cdp "$ip"
       ;;
     .1.3.6.1.4.1.2011.2.239.*) # huawei dcswitch
@@ -491,27 +491,27 @@ pqueue-register snmp-std -n 'x-snmp-dot1d' \
 pqueue-register snmp-std -n 'x-snmp-dot1q' \
   cb-snmp walk "${OIDS_dot1q[@]}"
 
-pqueue-register snmp-cisco -n 'x-snmp-netDefaultGateway' \
+pqueue-register snmp-cisco-std -n 'x-snmp-netDefaultGateway' \
   cb-snmp get "$OID_netDefaultGateway" --then-call \
     parse-cb-snmp-learn-ipv4 \
       "$OID_netDefaultGateway" \
       ' = IpAddress: ' \
       ''
 
-pqueue-register snmp-cisco -n 'x-snmp-vtp' \
+pqueue-register snmp-cisco-std -n 'x-snmp-vtp' \
   cb-snmp walk "${OIDS_vtp[@]}" --then-call \
     parse-cb-snmp-vtp
 
-pqueue-register snmp-cisco -n 'x-snmp-vlanTrunkPort' \
+pqueue-register snmp-cisco-std -n 'x-snmp-vlanTrunkPort' \
   cb-snmp walk "${OIDS_vlanTrunkPort[@]}"
 
-pqueue-register snmp-cisco -n 'x-snmp-vm' \
+pqueue-register snmp-cisco-std -n 'x-snmp-vm' \
   cb-snmp walk "${OIDS_vmTable[@]}"
 
-pqueue-register snmp-cisco -n 'x-snmp-pagpGroup' \
+pqueue-register snmp-cisco-std -n 'x-snmp-pagpGroup' \
   cb-snmp walk "${OIDS_pagpGroup[@]}"
 
-pqueue-register snmp-cisco -n 'x-snmp-stackPort' \
+pqueue-register snmp-cisco-std -n 'x-snmp-stackPort' \
   cb-snmp walk "${OIDS_stackPort[@]}"
 
 pqueue-register snmp-cisco-vlan \
