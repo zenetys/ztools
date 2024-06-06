@@ -30,6 +30,17 @@ function version() {
   echo "${PROGFILE##*/}${VERSION:+ $VERSION} - $AUTHOR - $LICENSE"
 }
 
+function on_exit() {
+  if [[ -n $GITREV && $SPECFILE == *.gitrev ]]; then
+    rm -f "$SPECDIR/$SPECFILE"
+  fi
+  if [[ -n $GIT_ARCHIVE_TMP && -d $GIT_ARCHIVE_TMP ]]; then
+    rm -rf "$GIT_ARCHIVE_TMP"
+  fi
+}
+
+trap on_exit EXIT
+
 declare QUIET=$QUIET
 declare VERBOSE=$VERBOSE
 declare XDEBUG=$XDEBUG
@@ -41,6 +52,7 @@ declare REPO=$REPO
 declare UPDATE=
 declare KEEP=
 declare NOKEEP=
+declare GITREV=
 declare SOURCEDIR=$SOURCEDIR
 declare OUTPUTDIR=$OUTPUTDIR
 declare PREBUILDSCRIPT=$PREBUILDSCRIPT
@@ -80,6 +92,8 @@ while (( $# > 0 )); do
     --keep) KEEP=1 ;;
     ## --nokeep: never keep build environment on error
     --nokeep) NOKEEP=1 ;;
+    ## --gitrev: create source0 tarball from git revision
+    --gitrev) GITREV=$2 ; shift ;;
     # generic args
     --) shift ; break ;;
     -*) usage "Unknown parameter '$1'" && exit 1 ;;
@@ -336,6 +350,51 @@ then
   RPMBUILDOPTS+=( --noclean )
 fi
 
+# Prepare env and script to be run inside the container
+BGROUP=$(id -gn)
+BUSER=${USER:-$(id -un)}
+BHOME=~
+
+# Handle $GITREV:
+# - create a source tarball from the current directory, assuming it is a git
+# - use it as source0
+# - change version accordingly (git describe) in spec file
+
+# $1: git rev
+# $2: output filename without extension (.tar.gz auto added)
+# $3: prefix without trailing slash
+function git_archive_mtime() {
+  GIT_ARCHIVE_TMP=$(mktemp -d) || return 1
+  git archive --format tar --prefix "$3/" \
+    "$1" ./ ':!rpmbuild-docker' ':!*.spec' ':!SPECS/' |
+    tar x -C "$GIT_ARCHIVE_TMP/" || return 1
+  find "$GIT_ARCHIVE_TMP/$3/" -not -type d -printf '%P\n' |
+    xargs -n 1 -I{} sh -c 'touch -d "$(git log --pretty=format:%ci -n 1 "$1" -- "$3")" "$2/$3"' -- \
+      "$1" "$GIT_ARCHIVE_TMP/$3/" {} || return 1
+  tar czf "$2.tar.gz" -C "$GIT_ARCHIVE_TMP/" "$3"
+}
+
+function gitrev2rpm() {
+  local gitdesc gitdate
+  gitdesc=$(git describe --tags --match 'v?*' --abbrev=7 --always "$1")
+  if [[ $gitdesc =~ ^(v(.+)(-[0-9]+-g))?([0-9a-f]+)$ ]]; then
+    gitdate=$(date -d "$(git log -n 1 --format='%ci' "$1")" +%Y%m%d%H%M%S)
+    REPLY=( "${BASH_REMATCH[2]:-0.0.0}^${gitdate}g${BASH_REMATCH[4]}.${BUSER:0:3}" "${BASH_REMATCH[4]}" )
+  else
+    REPLY=( "${gitdesc:1}" "${gitdesc:1}" )
+  fi
+}
+
+if [[ -n $GITREV ]]; then
+  gitrev2rpm "$GITREV"
+  project=${PWD##*/}
+  sed -re "s,(^\\s*Version\\s*:\\s*).*,\\1${REPLY[0]}," \
+    -e "s|(^\\s*source0\\s*:\\s*).*|\\1$project-dev.tar.gz|i" \
+    "$SPECDIR/$SPECFILE" > "$SPECDIR/$SPECFILE.gitrev"
+  SPECFILE="$SPECFILE.gitrev"
+  git_archive_mtime "$GITREV" "$SOURCEDIR/$project-dev" "$project-${REPLY[1]}"
+fi
+
 # Options for docker
 DOCKER_OPTS=(
   "${DOCKER_OPTS_DIST[@]}"
@@ -357,10 +416,6 @@ if [[ -n $PREBUILDSCRIPT ]] ; then
   DOCKER_OPTS+=( --mount "type=bind,src=$PREBUILDSCRIPT,dst=/tmp/$PREBUILDSCRIPTFILE" )
 fi
 
-# Prepare env and script to be run inside the container
-BGROUP=$(id -gn)
-BUSER=${USER:-$(id -un)}
-BHOME=~
 
 function build_exit() {
   local status=${1:-0}
