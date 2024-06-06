@@ -57,6 +57,7 @@ declare SOURCEDIR=$SOURCEDIR
 declare OUTPUTDIR=$OUTPUTDIR
 declare PREBUILDSCRIPT=$PREBUILDSCRIPT
 declare DOWNLOAD=1
+declare RPMOPTS=()
 declare RPMBUILDOPTS=()
 declare RPMSPECOPTS=()
 
@@ -104,8 +105,7 @@ done
 
 [[ $XDEBUG == 1 ]] && set -x
 
-RPMBUILDOPTS+=( "$@" )
-RPMSPECOPTS+=( "$@" )
+RPMOPTS+=( "$@" )
 
 declare SPECFILE=${ARGS[0]}
 [[ ${SPECFILE:0:1} != "/" ]] && SPECFILE=$PWD/$SPECFILE
@@ -468,16 +468,9 @@ EOF
     "/tmp/$PREBUILDSCRIPTFILE" || build_exit $?
   fi
 
-  rpmbuildopts=(
-    --define '_topdir /tmp/../tmp/../tmp'
-    --define "dist .$DIST"
-    "${RPMBUILDOPTS[@]}"
-  )
-  rpmspecopts=(
-    --define '_topdir /tmp/../tmp/../tmp'
-    --define "dist .$DIST"
-    "${RPMSPECOPTS[@]}"
-  )
+  RPMOPTS+=(  --define '_topdir /tmp/../tmp/../tmp' --define "dist .$DIST" )
+  rpmbuildopts=( "${RPMOPTS[@]}" "${RPMBUILDOPTS[@]}" )
+  rpmspecopts=( "${RPMOPTS[@]}" "${RPMSPECOPTS[@]}" )
 
   IFS=$'\n'
   buildreq=( $(rpmspec -P "/tmp/$SPECFILE" "${rpmspecopts[@]}" |
@@ -515,7 +508,7 @@ CTNAME="build_${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
 DOCKER_OPTS+=( --name "$CTNAME" -i --rm )
 trap 'docker kill "$CTNAME"; exit;' INT
 cat <<__EOF__ |docker run "${DOCKER_OPTS[@]}" "$IMAGE" /bin/bash &
-$(declare -p BGROUP BHOME BUSER DIST DIST_TYPE DIST_VERSION DOWNLOAD KEEP NOKEEP PREBUILDSCRIPTFILE REPO RPMBUILDOPTS RPMSPECOPTS SPECFILE UPDATE)
+$(declare -p BGROUP BHOME BUSER DIST DIST_TYPE DIST_VERSION DOWNLOAD KEEP NOKEEP PREBUILDSCRIPTFILE REPO RPMOPTS RPMBUILDOPTS RPMSPECOPTS SPECFILE UPDATE)
 $(declare -f build_exit)
 $(declare -f build_runas)
 $(declare -f build_dl)
