@@ -468,7 +468,7 @@ EOF
     "/tmp/$PREBUILDSCRIPTFILE" || build_exit $?
   fi
 
-  RPMOPTS+=(  --define '_topdir /tmp/../tmp/../tmp' --define "dist .$DIST" )
+  RPMOPTS+=(  --define '_topdir /tmp/../tmp/../tmp' )
   rpmbuildopts=( "${RPMOPTS[@]}" "${RPMBUILDOPTS[@]}" )
   rpmspecopts=( "${RPMOPTS[@]}" "${RPMSPECOPTS[@]}" )
 
