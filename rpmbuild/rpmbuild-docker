@@ -418,7 +418,7 @@ fi
 
 
 function build_exit() {
-  local status=${1:-0}
+  local status=${?:-0}
   [[ -n $NOKEEP ]] && exit "$status"
   [[ -n $KEEP || $status != 0 ]] && sleep infinity
   exit "$status"
@@ -443,7 +443,8 @@ function build_dl() {
   fi
 }
 function build_main() {
-  set -fx
+  set -fxe
+  trap build_exit EXIT
   OIFS=$IFS
 
   mkdir -p "$BHOME"
@@ -485,7 +486,7 @@ EOF
     sed -re 's/^ *([^ ]( +[^ ]|[^ ])*) *$/\1/') )
   IFS=$OIFS
   if [[ -n $buildreq ]]; then
-    yum install -y "${buildreq[@]}" || build_exit $?
+    yum install -y "${buildreq[@]}"
   fi
 
   # download sources if needed
@@ -493,14 +494,13 @@ EOF
     dlsources=( $(rpmspec -P "/tmp/$SPECFILE" "${rpmspecopts[@]}" |
       sed -nr -e 's,^(source|patch)[0-9]*\s*:\s*(\S+).*,\2,i;T;/:\/\//p') )
     for i in "${dlsources[@]}"; do
-        RUNAS="$BUSER" build_dl "$i" /tmp/SOURCES || build_exit $?
+        RUNAS="$BUSER" build_dl "$i" /tmp/SOURCES
     done
   fi
 
   # Having _topdir /tmp causes problems in el6/el7 because it is not long enough
   # https://access.redhat.com/solutions/1426113
-  build_runas "$BUSER" rpmbuild "${rpmbuildopts[@]}" -ba "/tmp/$SPECFILE" ||
-      build_exit $?
+  build_runas "$BUSER" rpmbuild "${rpmbuildopts[@]}" -ba "/tmp/$SPECFILE"
 
   if [[ -n $REPO && -n $UPDATE ]] ; then
     for repo in RPMS SRPMS; do
@@ -508,7 +508,6 @@ EOF
       build_runas "$BUSER" createrepo --update "/tmp/local-repo/$repo"
     done
   fi
-  build_exit 0
 }
 
 # Build RPM in the container
