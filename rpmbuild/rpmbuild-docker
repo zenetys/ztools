@@ -218,6 +218,7 @@ function dockerfile_for_dist_el7() {
 FROM centos:7
 RUN set -x && \
     ulimit -n 1024 && \
+    sed -i -re 's,mirror\.centos\.org,vault.centos.org,; s,^(mirrorlist),#\1,; s,^#(baseurl),\1,' /etc/yum.repos.d/CentOS-*.repo && \
     yum update -y && \
     yum install -y createrepo gcc make rpm-build && \
     echo '* - nproc 2048' >> /etc/security/limits.d/90-nproc.conf && \
