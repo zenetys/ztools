@@ -1,0 +1,204 @@
+#!/usr/bin/lua
+--
+-- Copyright(C) 2024 @ ZENETYS
+-- This script is licensed under MIT License (http://opensource.org/licenses/MIT)
+--
+
+local sqlite3 = require('lsqlite3')
+
+local PROGNAME = arg[0]:match('([^/]*)$')
+
+local DATABASE = nil
+local ADDONS = {}
+local QUERY = nil
+local VERBOSE = 1
+
+function get_my_pid()
+    local f = io.open('/proc/self/status', 'rb')
+    if not f then return nil end
+    local pid = nil
+    for l in f:lines() do
+        pid = l:match('^Pid:%s+([0-9]+)')
+        if pid then break end
+    end
+    f:close()
+    return pid
+end
+
+-- instance identifier for logs
+local ID = get_my_pid() or tostring(_G):sub(8)
+local DBH = nil
+
+function exit_usage(status)
+    print('Usage: '..PROGNAME..' [OPTION]...\
+Squid generic SQLite external ACL\n\
+Available options:\
+  -d, --database    DB      Path to SQLite database\
+  -q, --query       SQL     SQL query to run\
+  -a, --addon       FILE    Lua file to load\
+  -v, --verbose     LEVEL   Set stderr verbose level 0-2\
+  -h, --help                Display this help')
+    os.exit(status or 0)
+end
+
+function log(message)
+    io.stderr:write(PROGNAME..'['..ID..']: '..message..'\n')
+    io.stderr:flush()
+end
+
+function dquote(v)
+    return '"'..(tostring(v):gsub('[\\"]', '\\%0'))..'"'
+end
+
+function sqlquote(v)
+    return "'"..(tostring(v):gsub("'", "''")).."'"
+end
+
+function urldecode(v)
+  return (v:gsub("%%(%x%x)", function(x)
+      return string.char(tonumber(x, 16))
+  end))
+end
+
+function reply(ctx)
+    local output = (ctx.matched == nil and 'BH' or
+        (ctx.matched and 'OK' or 'ERR'))
+    for k,v in pairs(ctx.kv) do
+        output = output..' '..k..'='..dquote(v)
+    end
+    io.stdout:write(output..'\n')
+    io.stdout:flush()
+    if VERBOSE >= 2 or (VERBOSE >= 1 and ctx.matched == nil) then
+        log('[input] '..ctx.input..
+            ' [arg] '..table.concat(ctx.arg, '|')..
+            ' [query] '..tostring(ctx.query)..
+            ' [output] '..output)
+    end
+end
+
+function domain_in(domain, field)
+    if type(domain) ~= 'string' then error('invalid arg #1, string expected') end
+    -- assume valid domain
+    local output = field..' in ('..sqlquote(domain)
+    local pos1, pos2 = nil, 0
+    while true do
+        pos1, pos2 = domain:find('%.', pos2+1)
+        if pos1 == nil then break end
+        output = output..', '..sqlquote(domain:sub(pos2+1))
+    end
+    return output..')'
+end
+
+function process(ctx)
+    -- parse input line: [arg]...
+    local pos1, pos2 = nil, 0
+    while true do
+        pos1, pos2 = ctx.input:find('[^%s]+', pos2+1)
+        if pos1 == nil then break end
+        local v = ctx.input:sub(pos1, pos2)
+        table.insert(ctx.arg, v == '-' and '' or v)
+    end
+
+    if ctx.query == nil then ctx.query = QUERY end
+    if ctx.query == nil or #ctx.query == 0 then error('No SQL query') end
+
+    -- expand %{lua-code} in query
+    ctx.query = ctx.query:gsub('%%%b{}', function (x)
+        x = x:sub(3, -2)
+        local env = setmetatable({ ctx = ctx }, { __index = _ENV })
+        local fn, err = load('return '..x, nil, nil, env)
+        if not fn then error('Query compile error: '..tostring(err)) end
+        local success, ret = pcall(fn)
+        if not success then error('Query eval error: '..ret:gsub('.*]:1: ', '')) end
+        if type(ret) ~= 'string' then error('Query eval type error: return string expected') end
+        return ret
+    end)
+
+    -- run query
+    if not DBH then
+        local errmsg
+        DBH, _,errmsg = sqlite3.open(DATABASE, sqlite3.OPEN_READONLY)
+        if not DBH then error('Sqlite open error: '..errmsg) end
+    end
+    -- query is expected to return maximum 1 row
+    local success, sqlret = pcall(function () for r in DBH:nrows(ctx.query) do return r end end)
+    if not success then error('Sqlite query error: '..sqlret) end
+    -- sqlret nil: no match
+    -- sqlret.matched defined: not a number: error, 0: no match, *: match
+    -- sqlret.matched not defined: match
+    if sqlret then
+        local aclret = true
+        for k,v in pairs(sqlret) do
+            if k == 'matched' then
+                if type(v) ~= 'number' then
+                    error("Sqlite column 'matched' must be a number")
+                end
+                aclret = (v ~= 0)
+            else
+                ctx.kv[k] = v
+            end
+        end
+        return aclret
+    else
+        return false
+    end
+end
+
+function main_loop(arg)
+    while true do
+        local ctx = { arg = {}, kv = {} }
+        ctx.input = io.read('*line')
+        if ctx.input == nil then break end
+
+        local success, ret = pcall(process, ctx)
+        if success then
+            ctx.matched = ret
+        else
+            -- thrown error object is in pcall() second return value
+            ctx.matched = nil
+            ctx.kv.message = tostring(ret)
+        end
+        reply(ctx)
+    end
+end
+
+local i = 1
+local x
+while i <= #arg do
+    if arg[i] == '-d' or arg[i] == '--database' then
+        DATABASE = arg[i+1]
+        i = i + 1
+    elseif arg[i] == '-q' or arg[i] == '--query' then
+        QUERY = arg[i+1]
+        i = i + 1
+    elseif arg[i] == '-a' or arg[i] == '--addon' then
+        table.insert(ADDONS, arg[i+1])
+        i = i + 1
+    elseif arg[i] == '-v' or arg[i] == '--verbose' then
+        VERBOSE = tonumber(arg[i+1])
+        i = i + 1
+    elseif arg[i] == '-h' or arg[i] == '--help' then
+        exit_usage(0)
+    else
+        exit_usage(1)
+    end
+    i = i + 1
+end
+
+
+if DATABASE == nil then exit_usage(1) end
+if VERBOSE == nil then exit_usage(1) end
+
+log('DATABASE='..tostring(DATABASE)..
+    ', QUERY='..tostring(QUERY)..
+    ', VERBOSE='..tostring(VERBOSE)..
+    ', ADDONS='..table.concat(ADDONS))
+
+for _,a in ipairs(ADDONS) do
+    local fn, err = loadfile(a, nil, _ENV)
+    if not fn then log('Addon compile error: '..err) os.exit(2) end
+    local success, err = pcall(fn)
+    if not success then log('Addon eval error: '..err) os.exit(2) end
+end
+
+main_loop()
