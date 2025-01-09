@@ -1,0 +1,145 @@
+#!/bin/bash
+
+PROGNAME=${0##*/}
+export LC_ALL=C
+set -o pipefail
+set -f
+
+URL=${URL:-http://dsi.ut-capitole.fr/blacklists/download/blacklists.tar.gz}
+CATEGORIES=${CATEGORIES-}
+INDEX=${INDEX:-category:type:key}
+KEEP=${KEEP-}
+FORCE=${FORCE-}
+QUIET=${QUIET-}
+SKIP_STATUS=${SKIP_STATUS:-3}
+
+declare -r VARDIR="${VARDIR:-${TMPDIR:-/tmp}/$PROGNAME}"
+declare -r CACHEDIR="$VARDIR/cache"
+declare -r SPOOLDIR="$VARDIR/spool"
+declare -r LOCK_FILE="$VARDIR/$PROGNAME.lock"
+LOCK_TAKEN=
+
+function exit_usage() {
+    local status=${1:-0}
+    [[ $status != 0 ]] && exec >&2
+    echo "\
+Usage: $PROGNAME [OPTION...]
+Index UT1 blacklists in an sqlite database
+
+Available options:
+    -o, --output        FILE    Target sqlite file
+    -u, --url           URL     UT1 blacklists.tar.gz download URL
+    -c, --categories    LIST    Comma separated list of categories to insert
+    -i, --index         LIST    Comma separated index spec, format col[:col]...
+    -f, --force                 Force rebuild even if blacklists did not change
+    -k, --keep                  Do not cleanup temporary files on exit
+    -q, --quiet                 Print only errors
+    -h, --help                  Display this help"
+    exit "$status"
+}
+
+function fatal() { echo "$PROGNAME: FATAL: $*" >&2; exit 2; }
+function info() { [[ -n $QUIET ]] && return 0; echo "$PROGNAME: INFO: $*"; }
+
+function take_lock_or_fatal() {
+    if ! ln -sT "/proc/$$" "$LOCK_FILE" 2>/dev/null; then
+        [[ -e "$LOCK_FILE" ]] || release_lock
+        if ! ln -sT "/proc/$$" "$LOCK_FILE" 2>/dev/null; then
+            fatal "Cannot take lock $LOCK_FILE"
+        fi
+    fi
+    LOCK_TAKEN=1
+}
+
+function release_lock() {
+    rm -f "$LOCK_FILE" || return 1
+    LOCK_TAKEN=
+}
+
+function on_exit() {
+    if [[ -n $LOCK_TAKEN ]]; then
+        if [[ -n $SPOOLDIR && -d $SPOOLDIR && $KEEP != 1 ]]; then
+            rm -rf "$SPOOLDIR"
+        fi
+        release_lock
+    fi
+}
+
+while (( $# > 0 )); do
+    case "$1" in
+        -o|--output) OUTPUT=$2; shift ;; 
+        -u|--url) URL=$2; shift ;;
+        -c|--categories) CATEGORIES=$2; shift ;;
+        -i|--index) INDEX=$2; shift ;;
+        -f|--force) FORCE=1 ;;
+        -k|--keep) KEEP=1 ;;
+        -q|--quiet) QUIET=1 ;;
+        -h|--help) exit_usage 0 ;;
+        *) exit_usage 1 ;;
+    esac
+    shift
+done
+
+trap on_exit EXIT
+mkdir -p "$VARDIR" || fatal "Failed to create $VARDIR"
+take_lock_or_fatal
+mkdir -p "$CACHEDIR" || fatal "Failed to create $CACHEDIR"
+mkdir -p "$SPOOLDIR" || fatal "Failed to create $SPOOLDIR"
+[[ -z $OUTPUT ]] && OUTPUT="$CACHEDIR/ut1.db"
+[[ $OUTPUT == */* ]] || OUTPUT="./$OUTPUT"
+[[ -n ${OUTPUT##*/} ]] || fatal "Invalid database output file"
+mkdir -p "${OUTPUT%/*}" || fatal "Failed to create ${OUTPUT%/*}"
+
+info 'Download UT1 lists'
+http_code=$(curl -fsSL -o "$CACHEDIR/${URL##*/}" \
+    -z "$CACHEDIR/${URL##*/}" -w '%{http_code}' "$URL") ||
+    fatal 'Failed to download UT1 lists'
+
+if [[ $http_code == 304 && $FORCE != 1 ]]; then
+    info 'No change, exit'
+    exit "$SKIP_STATUS"
+fi
+
+info 'Extract UT1 lists'
+tar xzf "$CACHEDIR/${URL##*/}" -C "$SPOOLDIR" ||
+    fatal 'Failed to extract UT1 lists'
+
+info 'Build database'
+(
+    cd "$SPOOLDIR/blacklists" ||
+        fatal 'Failed to cd into extracted dir'
+
+    echo '
+.output /dev/null
+pragma synchronous = off;
+pragma journal_mode = memory;
+.output stdout
+drop table if exists furl;
+create table furl (category text, type text, key text);
+begin transaction;
+'
+
+    declare -A categories=()
+    for cat in ${CATEGORIES//,/$IFS}; do
+        categories["$cat"]=1
+    done
+    while read -r cat; do
+        [[ ${#categories[@]} != 0 && -z ${categories[$cat]} ]] && continue
+        for file in domains urls; do
+            [[ -f $cat/$file ]] || continue
+            while read -r; do
+                echo "insert into furl values ('${cat//\'/\'\'}', '${file%%s}', '${REPLY//\'/\'\'}');"
+            done < "$cat/$file"
+        done
+    done < <(find ./ -mindepth 1 -maxdepth 1 -type d -printf '%P\n')
+
+    echo 'end transaction;'
+    for idx in ${INDEX//,/$IFS}; do
+        echo "create index furl_${idx//:/_}_idx on furl (${idx//:/,});"
+    done
+
+) |sqlite3 "$SPOOLDIR/${OUTPUT##*/}" ||
+        fatal 'Failed to create database'
+
+mv "$SPOOLDIR/${OUTPUT##*/}" "$OUTPUT" ||
+    fatal 'Failed to install database'
