@@ -29,7 +29,8 @@ function curl_github_api_pages() {
 
 function get-data-lynx() {
   local url=$1 ; shift
-  lynx -dump "$url" | sed -n -r -e 's/^[ 0-9]+\. //p'
+  local expr=${1:-'s/^[ 0-9]+\. //p'}
+  lynx -dump "$url" | sed -n -r -e "$expr"
 }
 
 function get-data-json() {
