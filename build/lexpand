@@ -1,0 +1,90 @@
+#!/bin/lua
+
+-- libutil.lua
+
+local util = {}
+
+function util.expand(template, vars, lua_explain, modfn)
+    if not modfn then modfn = function (x) return x end end
+    local ret, err
+    function _replace_var(x)
+        local k = x:sub(3, -2)
+        local kk, alt = k:match('^([^:]+):%-(.*)')
+        return vars[kk] or alt or vars[k] or ''
+    end
+    function _replace_lua(x)
+        local k = x:sub(3, -2)
+        ret, err = util.lua('return '..k, (lua_explain or 'expand'), nil, '', vars)
+        return ret
+    end
+    local out, count
+    for _,s in ipairs({
+        -- process ${var} before %{lua}
+        { pattern = '$%b{}', fn = _replace_var },
+        { pattern = '%%%b{}', fn = _replace_lua },
+    }) do
+        fn = function (x) return modfn(s.fn(x)) end
+        repeat template, count = template:gsub(s.pattern, fn) until count == 0
+        if err then return nil, err end
+    end
+    return template
+end
+
+function util.lua(fn_code, explain, expect_type, null_value, env_limited)
+    local fn, err = load(fn_code, nil, nil, env_limited)
+    explain = explain and ' ('..explain..')' or ''
+    if not fn then
+        return null_value, 'Compile error'..explain..': '..err
+    end
+    local success, value = pcall(fn)
+    if not success then
+        return null_value, 'Eval error'..explain..': '..(value:gsub('.*]:1: ', ''))
+    end
+    local got_type = type(value)
+    if expected_type and got_type ~= expect_type then
+        return null_value, 'Type error'..explain..': Expected '..expect_type..', got '..got_type
+    end
+    return value == nil and null_value or value
+end
+
+function util.getpath(object, path, explain, expect_type, null_value)
+    return util.lua('return o.'..path, explain, expect_type, null_value, { o = object })
+end
+
+function util.sh(x)
+    return "'"..tostring(x):gsub("'", "'\\''").."'"
+end
+
+--
+
+function exec(cmd)
+    local fd, err = io.popen('set -o pipefail; set -e; '..cmd)
+    if err then return nil, err end
+    local stdout, err = fd:read('*a')
+    local rc = { fd:close() }
+    if err then return nil, err end
+    if rc[3] ~= 0 then return nil, 'exec failed status '..rc[3] end
+    return stdout
+end
+
+function tag(repo, branch, match)
+    local stdout, err = exec('\
+        git -C '..sh(repo)..' fetch &&\
+        git -C '..sh(repo)..' tag -l --merged '..sh(branch)..' |\
+            grep -E '..sh(match)..' |sort -V |tail -n 1\
+    ')
+    if err then error('[tag] '..err) end
+    return stdout:gsub('\n$', '')
+end
+
+sh = util.sh
+input = arg[1] or ''
+table.remove(arg, 1)
+
+local resolved, err = util.expand(input, _ENV, 'input')
+if err then
+    io.stderr:write(err..'\n')
+    os.exit(1)
+end
+
+io.stdout:write(resolved)
