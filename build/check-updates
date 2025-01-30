@@ -147,7 +147,7 @@ while [[ $# -gt 0 ]] ; do
 done
 
 [[ -d $CACHEDIR ]] || mkdir -p $CACHEDIR
-[[ -z $1 && -e $PROGNAME.def ]] && FILENAME=$PROGNAME.def
+[[ -z $FILENAME && -z $1 && -e $PROGNAME.def ]] && FILENAME=$PROGNAME.def
 
 if [[ $FILENAME ]] ; then
   status=0
