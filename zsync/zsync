@@ -229,12 +229,17 @@ function do_rsync() {
         rsync_opts+=( --exclude "$i" )
     done
 
+    if [[ -n $DRY_RUN && -z $CHECK ]]; then
+        info "DRY-RUN mode is enabled"
+    fi
+
     for i in "${PEERS[@]}"; do
         # bypass myself
         peer_is_myself "$i" && continue
-        if [[ -n $HAS_TTY ]]; then
-            info "${DRY_RUN:+DRY-RUN }rsync to ${C[blue]}${i}${C[reset]}..."
 
+        # list or diff changes
+        if [[ -n $HAS_TTY || -n $DRY_RUN ]]; then
+            info "Check sync of ${C[blue]}${i}${C[reset]}..."
             rsync "${rsync_opts[@]}" --dry-run --out-format "$dry_run_format" "${INCLUDES[@]}" "$i:/" > "$tempfile"
             peer_retval=$?
 
@@ -258,12 +263,11 @@ function do_rsync() {
 
             # bypass in dry-run mode
             [[ -n $DRY_RUN ]] && continue
-
+            # otherwise there is a tty and user must confirm to apply changes
             confirm "Please confirm to ${C[error]}sync${C[reset]} files? [N/y] " || continue
-        else
-            info "Rsync to $i..."
         fi
 
+        info "Rsync to $i..."
         rsync "${rsync_opts[@]}" --out-format "$sync_format" "${INCLUDES[@]}" "$i:/"
         peer_retval=$?
 
