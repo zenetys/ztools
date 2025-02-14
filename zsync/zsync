@@ -293,7 +293,6 @@ argv=( "$@" )
 
 while (( $# > 0 )); do
     case "$1" in
-        --x-debug) XDEBUG=1 ;;
         -c|--config) CONFIG=$2; shift ;;
         -f|--force) DRY_RUN= ;;
         -R|--become-root) BECOMEROOT=1 ;;
@@ -304,6 +303,7 @@ while (( $# > 0 )); do
         --do-remote) do_remote; exit $? ;;
         --do-rsync)  do_remote_rsync "${@:2}"; exit $? ;;
         --do-keyscan) keyscan=1 ;;
+        --x-debug) XDEBUG=1 ;;
         -h|--help) exit_usage ;;
         --) shift; break ;;
         -*) exit_usage 1 ;;
