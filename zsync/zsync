@@ -99,11 +99,6 @@ function warning() {
     info --${FUNCNAME[0]} "$@"
 }
 
-function debug() {
-    (( DEBUG == 0 )) && return 0
-    info --${FUNCNAME[0]} "$@"
-}
-
 function take_lock_or_fatal() {
     if ! ln -sT "/proc/$$" "$LOCK_FILE" 2>/dev/null; then
         [[ -e "$LOCK_FILE" ]] || release_lock
