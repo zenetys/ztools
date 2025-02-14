@@ -61,6 +61,7 @@ Options:
     -d, --diff      View diff on text files
     -i, --include   Add include rule
     -e, --exclude   Add exclude rule
+    -t, --check     Check mode, implies dry-run
     -h, --help      Display this help
 
 Current configuration file: $CONFIG
@@ -72,6 +73,12 @@ ignores the peers defined in the configuration file.
 These two forms are equivalent:
     $PROGNAME -i INC1 -i INC2 -e EXC1
     $PROGNAME -e EXC1 INC1 INC2
+
+Check mode is ment to be used from scripts to test if peers are
+in sync. In check mode, status codes are as follows:
+    0: peers in sync
+    1: peers out of sync
+    2: error, sync status is undefined
 "
     exit "$status"
 }
@@ -206,6 +213,10 @@ function do_remote_rsync() {
 }
 
 function do_rsync() {
+    # retval: This function status code, non-zero on error.
+    # CHECK_OUT_OF_SYNC: Only in check mode. Track peers that are out of sync.
+    #   This variable is populated only in check mode.
+    CHECK_OUT_OF_SYNC=()
     local i retval=0 peer_retval
     local rsync_opts=(
         --archive # -rlptgoD
@@ -261,6 +272,8 @@ function do_rsync() {
                 cat "$tempfile"
             fi
 
+            # register peer as out of sync in check mode
+            [[ -n $CHECK ]] && CHECK_OUT_OF_SYNC+=( "$i" )
             # bypass in dry-run mode
             [[ -n $DRY_RUN ]] && continue
             # otherwise there is a tty and user must confirm to apply changes
@@ -297,6 +310,7 @@ keyscan=
 argv=( "$@" )
 XDEBUG=
 DIFF=
+CHECK=
 
 while (( $# > 0 )); do
     case "$1" in
@@ -307,6 +321,7 @@ while (( $# > 0 )); do
         -H|--host) peers+=( "$2" ); shift ;;
         -i|--include) includes+=( "$2" ); shift ;;
         -e|--exclude) excludes+=( "$2" ); shift ;;
+        -t|--check) CHECK=1 ;;
         --do-remote) do_remote; exit $? ;;
         --do-rsync)  do_remote_rsync "${@:2}"; exit $? ;;
         --do-keyscan) keyscan=1 ;;
@@ -378,6 +393,18 @@ for i in "${INCLUDES[@]}"; do
     fi
 done
 
+[[ -n $CHECK ]] && DRY_RUN=1
+
 [[ -z $DRY_RUN ]] && take_lock_or_fatal
 
 do_rsync
+retval=$?
+
+if [[ -n $CHECK ]]; then
+    case "$retval,${#CHECK_OUT_OF_SYNC[@]}" in
+        0,0) exit 0 ;;
+        0,*) exit 1 ;;
+        *) exit 2 ;;
+    esac
+fi
+exit "$retval"
