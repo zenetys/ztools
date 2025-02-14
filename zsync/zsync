@@ -122,9 +122,10 @@ function on_exit() {
 }
 
 function confirm() {
+    local user_input
     echo -n "$1"
-    read -r
-    if [[ "$REPLY" != [Yy] ]]; then
+    read -r user_input
+    if [[ "$user_input" != [Yy] ]]; then
         info "Sync aborted at user request"
         return 1
     fi
