@@ -155,7 +155,7 @@ function show_diff() {
             (( ${#ascii_files[@]} > 10 )) &&
                 warning "Too many text files for diff, display the first 10"
         fi
-    done < "$tempfile"
+    done < "$difflist"
 
     if (( ${#ascii_files[@]} > 0 )); then
         # echo "ASCII : ${ascii_files[*]}" >&2
