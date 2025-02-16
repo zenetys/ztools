@@ -23,6 +23,7 @@ PEERS=()
 INCLUDES=()
 EXCLUDES=()
 USE_RSYNC_UPDATE= # set USE_RSYNC_UPDATE=1 in config to use rsync --update
+USE_RSYNC_XATTRS= # set USE_RSYNC_XATTRS=1 in config to use rsync --xattrs
 SUDO_REMOTE=""
 
 if tty -s >/dev/null 2>&1; then
@@ -222,6 +223,7 @@ function do_rsync() {
         --archive # -rlptgoD
         --acls
         ${USE_RSYNC_UPDATE:+--update}
+        ${USE_RSYNC_XATTRS:+--xattrs}
         --one-file-system
         --compress
         --checksum
