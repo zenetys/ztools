@@ -41,12 +41,6 @@ else
     HAS_TTY=
 fi
 
-if type -P colordiff >/dev/null; then
-    HAS_COLORDIFF=1
-else
-    HAS_COLORDIFF=
-fi
-
 function exit_usage() {
     local status=${1:-0}
     [[ "$status" != "0" ]] && exec >&2
@@ -156,6 +150,16 @@ function show_diff() {
     local hash action mtime owner file
     local -a ascii_files=( )
 
+    local diffcolortest=$(diff --color 2>&1)
+    if (( $? == 127 )); then
+        error 'diff command not found'
+        return 1
+    elif [[ $diffcolortest != *'unrecognized option'* ]]; then
+        local diffcmd=( diff --color=auto )
+    else
+        local diffcmd=( diff )
+    fi
+
     while read hash acode action mtime perm owner file ; do
         printf "# %s %s %s %s %s %s\n" \
                "$acode" "$action" \
@@ -190,12 +194,7 @@ function show_diff() {
         (
             cd "$tempdir"
             find old -type f -printf "%P\0" |
-                xargs -0 -I{} diff --unidirectional-new-file -u old/{} new/{} |
-                if [[ -n $HAS_TTY && -n $HAS_COLORDIFF ]]; then
-                    colordiff
-                else
-                    cat
-                fi
+                xargs -0 -I{} "${diffcmd[@]}" --unidirectional-new-file -u old/{} new/{}
         )
         rm -rf "$tempdir"
     fi
