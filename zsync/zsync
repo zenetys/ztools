@@ -168,7 +168,10 @@ function show_diff() {
 
     if (( ${#ascii_files[@]} > 0 )); then
         # echo "ASCII : ${ascii_files[*]}" >&2
-        local tempdir=$(mktemp -d) || fatal "can't create temporary directory"
+        if ! local tempdir=$(mktemp -d); then
+            error "can't create temporary directory"
+            return 1
+        fi
         mkdir -p "$tempdir/old"
         ln -s / "$tempdir/new"
         (
@@ -236,7 +239,11 @@ function do_rsync() {
 
     local dry_run_format=' # %i %o %M %B %U:%G  /%f'
     local sync_format=' > %o /%f'
-    local tempfile=$(mktemp) || fatal "can't create temporary directory"
+    local tempfile
+    if ! local tempfile=$(mktemp); then
+        error "can't create temporary directory"
+        return 2
+    fi
 
     for i in "${EXCLUDES[@]}"; do
         rsync_opts+=( --exclude "$i" )
