@@ -187,7 +187,7 @@ function show_diff() {
         (
             cd "$tempdir"
             find old -type f -printf "%P\0" |
-                xargs -0 -l -I{} diff --unidirectional-new-file -u old/{} new/{} |
+                xargs -0 -I{} diff --unidirectional-new-file -u old/{} new/{} |
                 if [[ -n $HAS_TTY && -n $HAS_COLORDIFF ]]; then
                     colordiff
                 else
