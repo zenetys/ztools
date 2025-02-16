@@ -1,0 +1,140 @@
+#!/bin/bash
+
+PROGNAME=${0##*/}
+CACHEDIR=${CACHEDIR:-/tmp}
+shopt -s nullglob
+
+function exit_usage() {
+    local status=${1:-0}
+    [[ $status != 0 ]] && exec >&2
+    echo "\
+Usage: $PROGNAME [-i IMAGE | -d DIST] [--] MODULE...
+Build SELinux module on the local system or within a docker image
+
+Available options:
+    -d, --dist          ALIAS   Docker image alias, eg: el9
+    -i, --docker-image  IMAGE   Docker image to build into
+    -C, --chdir         DIR     Change current directory
+    -h, --help                  Display this help
+"
+    exit "$status"
+}
+
+function fatal() {
+    echo "FATAL: $PROGNAME: $*"
+    exit 2
+}
+
+function build() {
+    local cmd=( make -f /usr/share/selinux/devel/Makefile clean "$@" )
+    if [[ -n $BUILD_UID ]]; then
+        runuser -l "$BUILD_UID" -c "${cmd[*]@Q}"
+    else
+        "${cmd[@]}"
+    fi
+}
+
+function docker_prepare() {
+    local ID= ID_LIKE=
+    [[ -e /etc/os-release ]] && source /etc/os-release
+    case "${ID_LIKE:-$ID}" in
+        *rhel*) docker_prepare_redhat ;;
+        *debian*) docker_prepare_debian ;;
+    esac
+    [[ -e /usr/share/selinux/devel/Makefile ]] || return 1
+    type -p make >/dev/null || return 1
+    echo '* - nproc 2048' >> /etc/security/limits.d/90-nproc.conf
+    cd /tmp/src
+}
+
+function docker_prepare_redhat() {
+    mkdir -p /tmp/cache/dnf
+    rm -rf /var/cache/dnf
+    ln -snf /tmp/cache/dnf /var/cache/dnf
+    echo keepcache=1 >> /etc/dnf/dnf.conf
+    dnf install -y --setopt install_weak_deps=0 \
+        findutils \
+        make \
+        selinux-policy-devel
+}
+
+function docker_prepare_debian() {
+    mkdir -p /tmp/cache/apt-{lib,cache}
+    rm -rf /var/{lib,cache}/apt
+    ln -snf /tmp/cache/apt-lib /var/lib/apt
+    ln -snf /tmp/cache/apt-cache /var/cache/apt
+    rm -f /etc/apt/apt.conf.d/docker-*
+    {   echo 'APT::Keep-Downloaded-Packages "true";'
+        echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";'
+        echo 'APT::Cmd::Disable-Script-Warning "true";'
+    } >> /etc/apt/apt.conf.d/zz-sebuild
+    apt -y update
+    apt -y --no-install-recommends install \
+        findutils \
+        make \
+        selinux-policy-dev
+}
+
+DOCKER_ALIAS=
+DOCKER_IMAGE=
+
+while (( $# > 0 )); do
+    case "$1" in
+        -d|--dist) DOCKER_ALIAS=$2; shift ;;
+        -i|--docker-image) DOCKER_IMAGE=$2; shift ;;
+        -C|--chdir) cd "$2" || fatal 'Failed to change directory'; shift ;;
+        -h|--help) exit_usage ;;
+        --) shift; break ;;
+        *) break ;;
+    esac
+    shift
+done
+
+[[ -z $1 ]] && set -- *.te
+MODULES=( "${@%.*}" )
+[[ -z $MODULES ]] && exit_usage 1
+
+if [[ -z $DOCKER_IMAGE && -n $DOCKER_ALIAS ]]; then
+    case "$DOCKER_ALIAS" in
+        el8) DOCKER_IMAGE=rockylinux:8 ;;
+        el9) DOCKER_IMAGE=rockylinux:9 ;;
+        *) fatal 'Docker alias unsupported' ;;
+    esac
+fi
+
+# Local build
+if [[ -z $DOCKER_IMAGE ]]; then
+    BUILD_UID=
+    build "${MODULES[@]/%/.pp}"
+    exit $?
+fi
+
+# Docker build
+BUILD_UID=$(id -un)
+BUILD_GID=$(id -gn)
+CACHEDIR="$CACHEDIR/$PROGNAME.${DOCKER_IMAGE//[^[:alnum:]]/_}"
+CTNAME="sebuild_${RANDOM}${RANDOM}"
+mkdir -p "$CACHEDIR" || fatal 'Failed to create cachedir'
+
+trap 'docker kill "$CTNAME"; exit 130;' INT
+tee /dev/stderr <<__EOF__ |
+$(eval $(declare -f -F |fgrep docker_prepare))
+$(declare -f build)
+$(declare -p MODULES BUILD_UID BUILD_GID)
+set -xe
+echo $(getent group "$BUILD_GID") >> /etc/group
+echo $(getent passwd "$BUILD_UID" |awk -F : '{ OFS = FS; $6 = "/tmp/src"; print }') >> /etc/passwd
+docker_prepare
+build "\${MODULES[@]/%/.pp}"
+__EOF__
+    docker run \
+        --rm \
+        --interactive \
+        --name "$CTNAME" \
+        --security-opt seccomp=unconfined \
+        --ulimit nofile=1024 \
+        --mount "type=bind,src=$CACHEDIR,dst=/tmp/cache" \
+        --mount "type=bind,src=$PWD,dst=/tmp/src" \
+        "$DOCKER_IMAGE" \
+        /bin/bash &
+wait "$!"
