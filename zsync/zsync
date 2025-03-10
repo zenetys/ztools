@@ -169,7 +169,7 @@ function show_diff() {
                "$mtime" "$perm" "$owner" "$file"
         if [[ ${acode:1:2} == "fc"     ]] &&
            (( ${#ascii_files[@]} <= 10 )) &&
-           [[ $(file $file) =~ ASCII   ]]; then
+           [[ $(file $file) =~ ASCII|text ]]; then
             ascii_files+=( "$file" )
             (( ${#ascii_files[@]} > 10 )) &&
                 warning "Too many text files for diff, display the first 10"
