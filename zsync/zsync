@@ -225,7 +225,7 @@ function do_rsync() {
     # CHECK_OUT_OF_SYNC: Only in check mode. Track peers that are out of sync.
     #   This variable is populated only in check mode.
     CHECK_OUT_OF_SYNC=()
-    local i retval=0 peer_retval
+    local i retval=0 peer peer_retval
     local rsync_opts=(
         --archive # -rlptgoD
         --acls
@@ -257,20 +257,20 @@ function do_rsync() {
         info "DRY-RUN mode is enabled"
     fi
 
-    for i in "${PEERS[@]}"; do
+    for peer in "${PEERS[@]}"; do
         # bypass myself
-        peer_is_myself "$i" && continue
+        peer_is_myself "$peer" && continue
 
         # list or diff changes
         if [[ -n $HAS_TTY || -n $DRY_RUN ]]; then
-            info "Check sync of ${C[blue]}${i}${C[reset]}..."
-            rsync "${rsync_opts[@]}" --dry-run --out-format "$dry_run_format" "${INCLUDES[@]}" "$i:/" > "$tempfile"
+            info "Check sync of ${C[blue]}${peer}${C[reset]}..."
+            rsync "${rsync_opts[@]}" --dry-run --out-format "$dry_run_format" "${INCLUDES[@]}" "$peer:/" > "$tempfile"
             peer_retval=$?
 
             if (( peer_retval != 0 )); then
-                error "Rsync to $i returned error code $peer_retval"
+                error "Rsync to $peer returned error code $peer_retval"
                 if (( peer_retval == 255 )); then
-                    error "Try: ssh-copy-id${SSH_USER:+ -l "$SSH_USER"}${SSH_IDENTITY:+ -i "$SSH_IDENTITY"} -o StrictHostKeyChecking=ask $i"
+                    error "Try: ssh-copy-id${SSH_USER:+ -l "$SSH_USER"}${SSH_IDENTITY:+ -i "$SSH_IDENTITY"} -o StrictHostKeyChecking=ask $peer"
                 fi
                 retval=1
                 continue
@@ -280,27 +280,27 @@ function do_rsync() {
             [[ -s $tempfile ]] || continue
 
             if [[ -n $DIFF ]]; then
-                show_diff "$tempfile" "$i"
+                show_diff "$tempfile" "$peer"
             else
                 cat "$tempfile"
             fi
 
             # register peer as out of sync in check mode
-            [[ -n $CHECK ]] && CHECK_OUT_OF_SYNC+=( "$i" )
+            [[ -n $CHECK ]] && CHECK_OUT_OF_SYNC+=( "$peer" )
             # bypass in dry-run mode
             [[ -n $DRY_RUN ]] && continue
             # otherwise there is a tty and user must confirm to apply changes
             confirm "Please confirm to ${C[error]}sync${C[reset]} files? [N/y] " || continue
         fi
 
-        info "Rsync to $i..."
-        rsync "${rsync_opts[@]}" --out-format "$sync_format" "${INCLUDES[@]}" "$i:/"
+        info "Rsync to $peer..."
+        rsync "${rsync_opts[@]}" --out-format "$sync_format" "${INCLUDES[@]}" "$peer:/"
         peer_retval=$?
 
         if (( peer_retval == 0 )); then
-            info "Done rsync to $i"
+            info "Done rsync to $peer"
         else
-            error "Rsync to $i returned error code $peer_retval"
+            error "Rsync to $peer returned error code $peer_retval"
             retval=1
         fi
     done
