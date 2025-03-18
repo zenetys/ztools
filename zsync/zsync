@@ -177,7 +177,8 @@ function show_diff() {
 
     if (( ${#ascii_files[@]} > 0 )); then
         # echo "ASCII : ${ascii_files[*]}" >&2
-        if ! local tempdir=$(mktemp -d); then
+        local tempdir
+        if ! tempdir=$(mktemp -d); then
             error "can't create temporary directory"
             return 1
         fi
