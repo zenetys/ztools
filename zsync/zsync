@@ -250,7 +250,7 @@ function do_rsync() {
     )
 
     local dry_run_format=' # %i %o %M %B %U:%G  /%f'
-    local sync_format=' > %o /%f'
+    local sync_format=' > %i %o /%f'
     if [[ -n $HAS_TTY || -n $DRY_RUN ]] && ! need_tempdir; then
         error "can't create temporary directory"
         return 2
