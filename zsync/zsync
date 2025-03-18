@@ -16,6 +16,7 @@ DRY_RUN=1
 BECOMEROOT=0
 LOCK_FILE="/dev/shm/$PROGNAME.lock"
 LOCK_TAKEN=
+declare -r ZSYNC_TEMPDIR="${TMPDIR:-/tmp}/$PROGNAME.$$.$RANDOM"
 
 CONFIG=${ZSYNC_CONFIG:-$HOME/.zsync.cfg}
 [[ -r $CONFIG ]] || CONFIG=/etc/ztools/zsync.cfg
@@ -120,7 +121,14 @@ function release_lock() {
     LOCK_TAKEN=
 }
 
+function need_tempdir() {
+    mkdir -p "$ZSYNC_TEMPDIR" || return 1
+}
+
 function on_exit() {
+    if [[ -n $ZSYNC_TEMPDIR && -d $ZSYNC_TEMPDIR/. ]]; then
+        rm -rf "$ZSYNC_TEMPDIR"
+    fi
     if [[ -n $LOCK_TAKEN ]]; then
         release_lock
     fi
@@ -177,13 +185,12 @@ function show_diff() {
 
     if (( ${#ascii_files[@]} > 0 )); then
         # echo "ASCII : ${ascii_files[*]}" >&2
-        local tempdir
-        if ! tempdir=$(mktemp -d); then
+        if ! need_tempdir; then
             error "can't create temporary directory"
             return 1
         fi
-        mkdir -p "$tempdir/old"
-        ln -s / "$tempdir/new"
+        mkdir -p "$ZSYNC_TEMPDIR/old"
+        ln -s / "$ZSYNC_TEMPDIR/new"
         (
             IFS=$'\t'
             function do_remote() {
@@ -193,13 +200,13 @@ function show_diff() {
             echo "do_remote$IFS${ascii_files[*]}"
         ) |
             "${SSHCMD[@]}" "$peer" "[[ -x $0 ]] && CMD='$0 --do-remote' || CMD='bash'; $SUDO_REMOTE \$CMD" |
-            tar zx -C "$tempdir/old"
+            tar zx -C "$ZSYNC_TEMPDIR/old"
         (
-            cd "$tempdir"
+            cd "$ZSYNC_TEMPDIR"
             find old -type f -printf "%P\0" |
                 xargs -0 -I{} "${diffcmd[@]}" --unidirectional-new-file -u old/{} new/{}
         )
-        rm -rf "$tempdir"
+        rm -rf "$ZSYNC_TEMPDIR"/{old,new}
     fi
 }
 
@@ -244,8 +251,7 @@ function do_rsync() {
 
     local dry_run_format=' # %i %o %M %B %U:%G  /%f'
     local sync_format=' > %o /%f'
-    local tempfile
-    if ! tempfile=$(mktemp); then
+    if ! need_tempdir; then
         error "can't create temporary directory"
         return 2
     fi
@@ -265,7 +271,7 @@ function do_rsync() {
         # list or diff changes
         if [[ -n $HAS_TTY || -n $DRY_RUN ]]; then
             info "Check sync of ${C[blue]}${peer}${C[reset]}..."
-            rsync "${rsync_opts[@]}" --dry-run --out-format "$dry_run_format" "${INCLUDES[@]}" "$peer:/" > "$tempfile"
+            rsync "${rsync_opts[@]}" --dry-run --out-format "$dry_run_format" "${INCLUDES[@]}" "$peer:/" > "$ZSYNC_TEMPDIR/list"
             peer_retval=$?
 
             if (( peer_retval != 0 )); then
@@ -278,12 +284,12 @@ function do_rsync() {
             fi
 
             # bypass if diff empty
-            [[ -s $tempfile ]] || continue
+            [[ -s $ZSYNC_TEMPDIR/list ]] || continue
 
             if [[ -n $DIFF ]]; then
-                show_diff "$tempfile" "$peer"
+                show_diff "$ZSYNC_TEMPDIR/list" "$peer"
             else
-                cat "$tempfile"
+                cat "$ZSYNC_TEMPDIR/list"
             fi
 
             # register peer as out of sync in check mode
@@ -305,7 +311,7 @@ function do_rsync() {
             retval=1
         fi
     done
-    rm -f "$tempfile"
+    rm -f "$ZSYNC_TEMPDIR/list"
     return "$retval"
 }
 
