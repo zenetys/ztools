@@ -319,7 +319,7 @@ peers=()
 includes=()
 excludes=()
 use_rsync_update=
-argv=( "$@" )
+ARGV=( "$@" )
 XDEBUG=
 DIFF=
 CHECK=
@@ -369,7 +369,7 @@ fi
 if (( $BECOMEROOT == 1 && $UID != 0 )); then
     sudo_opts=( -u root )
     [[ -t 0 ]] || sudo_opts=( -n )
-    exec sudo -u root "${sudo_opts[@]}" -- "$0" "${argv[@]}"
+    exec sudo -u root "${sudo_opts[@]}" -- "$0" "${ARGV[@]}"
 elif (( $BECOMEROOT == 1 )); then
     SUDO_REMOTE='[ "$UID" != 0 ] && SUDO="sudo -n -- "; $SUDO'
 fi
