@@ -8,6 +8,7 @@ export LC_ALL=C
 shopt -s nullglob
 set -o pipefail
 
+ARGV0=${BASH_SOURCE[0]}
 PROGNAME=${0##*/}
 HOSTNAME=$(< /proc/sys/kernel/hostname)
 HOSTNAME=${HOSTNAME%%.*}
@@ -238,7 +239,7 @@ function do_rsync() {
         --relative
         --omit-dir-times
         --delete
-        --rsync-path "[[ -x $0 ]] && CMD='$0 --do-rsync' || CMD='rsync' ; $SUDO_REMOTE \$CMD"
+        --rsync-path "[[ -x $ARGV0 ]] && CMD='${ARGV0@Q} --do-rsync' || CMD='rsync' ; $SUDO_REMOTE \$CMD"
         -e "${SSHCMD[*]}"
     )
 
