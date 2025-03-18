@@ -140,8 +140,7 @@ function confirm() {
 # $1: PEERS entry
 function peer_is_myself() {
     local short_peer_host=${1#*@}; short_peer_host=${short_peer_host%%.*}
-    local short_hostname=${HOSTNAME%%.*}
-    [[ ${short_peer_host,,} == ${short_hostname,,} ]] && return 0
+    [[ ${short_peer_host,,} == ${HOSTNAME,,} ]] && return 0
     return 1
 }
 
