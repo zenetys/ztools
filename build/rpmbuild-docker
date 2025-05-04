@@ -81,7 +81,7 @@ while (( $# > 0 )); do
     -I|--image) IMAGE=$2 ; shift ;;
     ## -s, --source PATH: define source directory
     -s|--sourcedir) SOURCEDIR=${2%/} ; shift ;;
-    ## -O, --outputdir PATH: define output directory for generated packages 
+    ## -O, --outputdir PATH: define output directory for generated packages
     -O|--outputdir) OUTPUTDIR=${2%/} ; shift ;;
     ## --no-download: skip downloading sources if needed
     --no-download) DOWNLOAD=0 ;;
