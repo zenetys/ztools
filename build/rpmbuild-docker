@@ -39,6 +39,11 @@ function on_exit() {
   fi
 }
 
+function fatal() {
+  echo "FATAL: $*" >&2
+  exit 1
+}
+
 trap on_exit EXIT
 
 declare QUIET=$QUIET
@@ -112,11 +117,7 @@ declare SPECFILE=${ARGS[0]}
 
 # cleanup potential trailing slashes
 SPECFILE=${SPECFILE%${SPECFILE##*[!/]}}
-
-if [[ ! -r $SPECFILE ]] ; then
-  echo "FATAL: can't open $SPECFILE for reading" >&2
-  exit 1
-fi
+[[ -r $SPECFILE ]] || fatal "Can't open $SPECFILE for reading"
 
 if [[ -d $SPECFILE ]] ; then
   if [[ -d $SPECFILE/SPECS ]] ; then
@@ -124,11 +125,7 @@ if [[ -d $SPECFILE ]] ; then
   else
     SPECFILE=( $SPECFILE/*.spec )
   fi
-
-  if [[ ${#SPECFILE[@]} != 1 ]]; then
-    echo "FATAL: undefined spec file : '${SPECFILE[*]}' " >&2
-    exit 1
-  fi
+  [[ ${#SPECFILE[@]} == 1 ]] || fatal "Undefined spec file: '${SPECFILE[*]}'"
 fi
 
 # define SPECDIR & SPECFILE from SPECFILE
@@ -153,13 +150,10 @@ elif [[ -z $PREBUILDSCRIPT ]]; then
   done
 fi
 if [[ -n $PREBUILDSCRIPT ]]; then
-  if [[ ! -r $PREBUILDSCRIPT ]]; then
-    echo "FATAL: can't open $PREBUILDSCRIPT for reading" >&2
-    exit 1
-  elif [[ ${PREBUILDSCRIPT##*.} == .sh && ! -x $PREBUILDSCRIPT ]]; then
-    echo "FATAL: prebuild script $PREBUILDSCRIPT not executable" >&2
-    exit 1
-  fi
+  [[ -r $PREBUILDSCRIPT ]] ||
+    fatal "Can't open $PREBUILDSCRIPT for reading"
+  [[ ${PREBUILDSCRIPT##*.} == .sh && ! -x $PREBUILDSCRIPT ]] &&
+    fatal "Prebuild script $PREBUILDSCRIPT not executable"
 fi
 
 [[ -z $SOURCEDIR ]] && SOURCEDIR=$PWD
@@ -283,50 +277,39 @@ function dockerscript_for_dist() {
 
 if [[ -f ~/.config/"${0##*/}/before-image.hook" ]] &&
    ! source ~/.config/"${0##*/}/before-image.hook"; then
-    echo "FATAL: failed to source before-image.hook" >&2
-    exit 1
+  fatal 'Failed to source before-image.hook'
 fi
 
 DOCKER_OPTS_DIST="DOCKER_OPTS_DIST_$DIST[@]"
 DOCKER_OPTS_DIST=( "${!DOCKER_OPTS_DIST}" )
 
 if [[ -z $IMAGE ]]; then
-  if [[ -z $DIST ]]; then
-    echo "FATAL: require -d DIST or -I IMAGE (or both)" >&2
-    exit 1
-  fi
+  [[ -z $DIST ]] && fatal 'Require -d DIST or -I IMAGE (or both)'
   # Set $IMAGE from $DIST
   image_src=; image_script=;
   if ! image_src=$(dockerfile_for_dist) &&
      ! image_script=$(dockerscript_for_dist); then
-    echo "FATAL: no image source for $DIST" >&2
-    exit 1
+    fatal "No image source for $DIST"
   fi
   image_sig=$(echo "${image_src:-$image_script}" |md5sum |sed -re 's,^(.{7}).*,\1,')
   IMAGE="rpmbuild/$DIST:$image_sig"
   if ! docker images -q "$IMAGE" |grep -q .; then
     # Build docker image
     if [[ -n $image_src ]] && ! echo "$image_src" |docker build -t "$IMAGE" -; then
-      echo "FATAL: failed to build image $IMAGE for $DIST" >&2
-      exit 1
+      fatal "Failed to build image $IMAGE for $DIST"
     elif ! echo "$image_script" |bash -s -- "$IMAGE" "${DOCKER_OPTS_DIST[@]}"; then
-      echo "FATAL: image $IMAGE for $DIST, build scripit failed" >&2
-      exit 1
+      fatal "Image $IMAGE for $DIST, build scripit failed"
     fi
   fi
 elif [[ -z $DIST ]]; then
   # Set $DIST from $IMAGE
   DIST=$(docker run --rm "$IMAGE" rpm -E '%{dist}' |sed 's,^\.\+,,')
-  if [[ -z $DIST ]]; then
-    echo "FATAL: failed to identify dist in image $IMAGE" >&2
-    exit 1
-  fi
+  [[ -z $DIST ]] && fatal "Failed to identify dist in image $IMAGE"
 fi
 
 if [[ -f ~/.config/"${0##*/}/after-image.hook" ]] &&
    ! source ~/.config/"${0##*/}/after-image.hook"; then
-    echo "FATAL: failed to source after-image.hook" >&2
-    exit 1
+  fatal "Failed to source after-image.hook"
 fi
 
 # Extract type and version from $DIST for convenience
@@ -342,10 +325,7 @@ echo "IMAGE: $IMAGE"
 for i in "$CACHEBASE"/cache-{yum-"$DIST",shared} \
          "$OUTPUTDIR"/{RPMS,SRPMS} \
          ${REPO:+"$REPO"}; do
-  if [[ ! -d $i ]] && ! mkdir -p "$i"; then
-    echo "FATAL: cannot create directory: $i" >&2
-    exit 1
-  fi
+  [[ ! -d $i ]] && ! mkdir -p "$i" && fatal "Cannot create directory: $i"
 done
 
 # Need rpmbuild --noclean option to keep generated files in place
