@@ -391,16 +391,9 @@ DOCKER_OPTS=(
   --mount "type=bind,src=$SOURCEDIR,dst=/tmp/SOURCES"
   --mount "type=bind,src=$OUTPUTDIR/SRPMS,dst=/tmp/SRPMS"
   --mount "type=bind,src=$OUTPUTDIR/RPMS,dst=/tmp/RPMS"
+  ${REPO:+--mount "type=bind,src=$REPO,dst=/tmp/local-repo"}
+  ${PREBUILDSCRIPT:+--mount "type=bind,src=$PREBUILDSCRIPT,dst=/tmp/${PREBUILDSCRIPT##*/}"}
 )
-
-if [[ -n $REPO ]] ; then
-  DOCKER_OPTS+=( --mount "type=bind,src=$REPO,dst=/tmp/local-repo" )
-fi
-
-if [[ -n $PREBUILDSCRIPT ]] ; then
-  DOCKER_OPTS+=( --mount "type=bind,src=$PREBUILDSCRIPT,dst=/tmp/${PREBUILDSCRIPT##*/}" )
-fi
-
 
 function build_exit() {
   local status=${?:-0}
