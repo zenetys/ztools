@@ -449,6 +449,8 @@ EOF
     esac
   fi
 
+  # Having _topdir /tmp causes problems in el6/el7 because it is not long enough
+  # https://access.redhat.com/solutions/1426113
   RPMOPTS+=(  --define '_topdir /tmp/../tmp/../tmp' )
   rpmbuildopts=( "${RPMOPTS[@]}" "${RPMBUILDOPTS[@]}" )
   rpmspecopts=( "${RPMOPTS[@]}" "${RPMSPECOPTS[@]}" )
@@ -472,8 +474,6 @@ EOF
     done
   fi
 
-  # Having _topdir /tmp causes problems in el6/el7 because it is not long enough
-  # https://access.redhat.com/solutions/1426113
   build_runuser rpmbuild "${rpmbuildopts[@]}" -ba "/tmp/$SPECFILE"
 
   if [[ -n $REPO && -n $UPDATE ]] ; then
