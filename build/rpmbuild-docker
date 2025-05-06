@@ -401,16 +401,15 @@ function build_exit() {
   [[ -n $KEEP || $status != 0 ]] && sleep infinity
   exit "$status"
 }
-function build_runas() {
-  printf -v qcmd "%q " "${@:2}"
-  runuser -l "$1" -c "$qcmd"
+function build_runuser() {
+  runuser -l "$BUSER" -c "${*@Q}"
 }
 function build_dl() {
   local curlopts=( -fRL --connect-timeout 15 ) url=$1 dest=${2:-$CACHEDIR} retval
   if [[ $url =~ ^([^#]+)(#?)/([^/]+)$ ]]; then
     [[ -f $dest/${BASH_REMATCH[3]} ]] && return 0
     [[ ${BASH_REMATCH[2]} == '#' ]] && url=${BASH_REMATCH[1]}
-    ${RUNAS:+build_runas "$RUNAS" }\
+    ${RUNUSER:+build_runuser} \
       curl "${curlopts[@]}" -o "$dest/${BASH_REMATCH[3]}" "$url"
     retval=$?
     REPLY="cURL return code $retval"
@@ -437,8 +436,8 @@ enabled=1
 gpgcheck=0
 EOF
     if [[ ! -d /tmp/local-repo/RPMS/repodata ]]; then
-      build_runas "$BUSER" mkdir -p /tmp/local-repo/RPMS
-      build_runas "$BUSER" createrepo /tmp/local-repo/RPMS
+      build_runuser mkdir -p /tmp/local-repo/RPMS
+      build_runuser createrepo /tmp/local-repo/RPMS
     fi
   fi
 
@@ -469,18 +468,18 @@ EOF
     dlsources=( $(rpmspec -P "/tmp/$SPECFILE" "${rpmspecopts[@]}" |
       sed -nr -e 's,^(source|patch)[0-9]*\s*:\s*(\S+).*,\2,i;T;/:\/\//p') )
     for i in "${dlsources[@]}"; do
-        RUNAS="$BUSER" build_dl "$i" /tmp/SOURCES
+        RUNUSER=1 build_dl "$i" /tmp/SOURCES
     done
   fi
 
   # Having _topdir /tmp causes problems in el6/el7 because it is not long enough
   # https://access.redhat.com/solutions/1426113
-  build_runas "$BUSER" rpmbuild "${rpmbuildopts[@]}" -ba "/tmp/$SPECFILE"
+  build_runuser rpmbuild "${rpmbuildopts[@]}" -ba "/tmp/$SPECFILE"
 
   if [[ -n $REPO && -n $UPDATE ]] ; then
     for repo in RPMS SRPMS; do
-      build_runas "$BUSER" cp -aT "/tmp/$repo/" "/tmp/local-repo/$repo/"
-      build_runas "$BUSER" createrepo --update "/tmp/local-repo/$repo"
+      build_runuser cp -aT "/tmp/$repo/" "/tmp/local-repo/$repo/"
+      build_runuser createrepo --update "/tmp/local-repo/$repo"
     done
   fi
 }
@@ -494,13 +493,13 @@ declare -p HOSTNAME
 $(declare -p BGROUP BHOME BUSER DIST DIST_TYPE DIST_VERSION DOWNLOAD KEEP NOKEEP REPO RPMOPTS RPMBUILDOPTS RPMSPECOPTS SPECFILE UPDATE)
 $(printf 'PREBUILDSCRIPT=%q\n' "${PREBUILDSCRIPT##*/}")
 $(declare -f build_exit)
-$(declare -f build_runas)
+$(declare -f build_runuser)
 $(declare -f build_dl)
 $(declare -f build_main)
 echo "$(getent group "$BGROUP")" >> /etc/group
 echo "$(getent passwd "$BUSER")" >> /etc/passwd
 # exports for prebuild script
-export -f build_dl build_runas
+export -f build_dl build_runuser
 export CACHEDIR=/tmp/cache-shared DIST DIST_TYPE DIST_VERSION
 build_main
 __EOF__
