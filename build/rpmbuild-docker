@@ -490,6 +490,7 @@ CTNAME="build_${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
 DOCKER_OPTS+=( --name "$CTNAME" -i --rm )
 trap 'docker kill "$CTNAME"; exit;' INT
 cat <<__EOF__ |docker run "${DOCKER_OPTS[@]}" "$IMAGE" /bin/bash &
+declare -p HOSTNAME
 $(declare -p BGROUP BHOME BUSER DIST DIST_TYPE DIST_VERSION DOWNLOAD KEEP NOKEEP REPO RPMOPTS RPMBUILDOPTS RPMSPECOPTS SPECFILE UPDATE)
 $(printf 'PREBUILDSCRIPT=%q\n' "${PREBUILDSCRIPT##*/}")
 $(declare -f build_exit)
