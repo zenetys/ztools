@@ -337,6 +337,7 @@ while (( $# > 0 )); do
         -i|--include) includes+=( "$2" ); shift ;;
         -e|--exclude) excludes+=( "$2" ); shift ;;
         -t|--check) CHECK=1 ;;
+        --use-rsync-update) use_rsync_update=1 ;;
         --do-remote) do_remote; exit $? ;;
         --do-rsync)  do_remote_rsync "${@:2}"; exit $? ;;
         --do-keyscan) keyscan=1 ;;
@@ -363,6 +364,9 @@ if [[ -n $CONFIG && -r $CONFIG ]]; then
         fatal "Cannot load configuration file '$CONFIG'"
     fi
 fi
+
+# Allow overriding rsync --update from command line
+[[ -n $use_rsync_update ]] && USE_RSYNC_UPDATE=$use_rsync_update
 
 # This script is ment to be run as root.
 if (( $BECOMEROOT == 1 && $UID != 0 )); then
