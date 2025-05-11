@@ -1,0 +1,2 @@
+SHELL=/bin/bash
+40 3 * * * root sleep ${RANDOM:0:2}m; (VARDIR=/var/lib/ut1-to-sqlite ut1-to-sqlite -i type:key && (squid -k parse >/dev/null 2>&1 || { echo "WARNING: squid -k parse failed, skip reload"; exit 1; }) && systemctl reload squid) 2>&1 |logger -t CRON-ut1-to-sqlite -p notice
