@@ -1,0 +1,11 @@
+[Unit]
+Description=Update UT1 database
+After=network-online.target
+After=squid.service
+
+[Service]
+Type=oneshot
+Environment=VARDIR=/var/lib/ut1-to-sqlite
+ExecStart=/bin/sh -c 'ut1-to-sqlite -i type:key && (squid -k parse >/dev/null 2>&1 || { echo "WARNING: squid -k parse failed, skip reload"; exit 1; }) && systemctl reload squid'
+SuccessExitStatus=0 3
+SyslogIdentifier=TIMER-ut1-to-sqlite

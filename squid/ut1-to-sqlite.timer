@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily update UT1 database
+
+[Timer]
+OnCalendar=*-*-* 03:40:00
+RandomizedDelaySec=2h
+
+[Install]
+WantedBy=timers.target
