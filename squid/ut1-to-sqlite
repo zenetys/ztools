@@ -95,7 +95,7 @@ http_code=$(curl -fsSL -o "$CACHEDIR/${URL##*/}" \
     -z "$CACHEDIR/${URL##*/}" -w '%{http_code}' "$URL") ||
     fatal 'Failed to download UT1 lists'
 
-if [[ $http_code == 304 && $FORCE != 1 ]]; then
+if [[ $http_code == 304 && $FORCE != 1 && -e $OUTPUT ]]; then
     info 'No change, exit'
     exit "$SKIP_STATUS"
 fi
