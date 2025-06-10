@@ -102,9 +102,9 @@ while (( $# > 0 )); do
     ## --update: update repository with new packages
     --update) UPDATE=1 ;;
     ## --keep: keep build environment after build_ldflags
-    --keep) KEEP=1 ;;
+    --keep) KEEP=1; NOKEEP= ;;
     ## --nokeep: never keep build environment on error
-    --nokeep) NOKEEP=1 ;;
+    --nokeep) NOKEEP=1; KEEP= ;;
     ## --gitrev: create source0 tarball from git revision
     --gitrev) GITREV=$2 ; shift ;;
     ## --sign: enable rpm signing
