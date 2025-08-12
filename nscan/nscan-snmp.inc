@@ -53,6 +53,7 @@ OIDS_if=(
   ${OID_ifPhysAddress:=.1.3.6.1.2.1.2.2.1.6}
   ${OID_ifAdminStatus:=.1.3.6.1.2.1.2.2.1.7}
   ${OID_ifOperStatus:=.1.3.6.1.2.1.2.2.1.8}
+  ${OID_ifLastChange:=.1.3.6.1.2.1.2.2.1.9}
 )
 
 OIDS_ifX=(
