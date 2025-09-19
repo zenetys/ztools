@@ -59,7 +59,7 @@ function get-data-tags-from-path() {
     git -C "$tmpdir" checkout "origin/$branch" || return 1
     last_hash=$(git -C "$tmpdir" log -1 --pretty=format:%H -- connectors/vmware/) || return 1
     [[ -n $last_hash ]] || return 1
-    git -C "$tmpdir" tag --contains "$last_hash"
+    git -C "$tmpdir" tag --contains "$last_hash" |sort -V |head -n 1
 }
 
 function get-data() {
