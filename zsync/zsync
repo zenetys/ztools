@@ -48,19 +48,19 @@ function exit_usage() {
     [[ "$status" != "0" ]] && exec >&2
 
     echo "\
-Usage: $PROGNAME [OPTION]... [FILE]...
+Usage: $PROGNAME [OPTION]... [--] [FILE]...
 Rsync wrapper for cluster/HA platforms
 
 Options:
-    -c, --config    Path to configuration file
-    -f, --force     Disable dry-run mode
-    -H, --host      Set target host
-    -d, --diff      View diff on text files
-    -i, --include   Add include rule
-    -e, --exclude   Add exclude rule
-    -t, --check     Check mode, implies dry-run
-    -q, --quiet     Disable stdout, repeat for stderr
-    -h, --help      Display this help
+    -f, [--]force       Disable dry-run mode
+    -t, [--]check       Check mode, implies dry-run
+    -d, [--]diff        View diff on text files
+    -c, --config        Path to configuration file
+    -H, --host          Set target host
+    -i, --include       Add include rule
+    -e, --exclude       Add exclude rule
+    -q, --quiet         Disable stdout, repeat for stderr
+    -h, --help          Display this help
 
 Current configuration file: $CONFIG
 
@@ -323,14 +323,14 @@ QUIET=0
 
 while (( $# > 0 )); do
     case "$1" in
+        -f|--force|push) DRY_RUN= ;;
+        -t|--check|check) CHECK=1 ;;
+        -d|--diff|diff) DIFF=1 ;;
         -c|--config) CONFIG=$2; shift ;;
-        -f|--force) DRY_RUN= ;;
         -R|--become-root) BECOMEROOT=1 ;;
-        -d|--diff) DIFF=1 ;;
         -H|--host) peers+=( "$2" ); shift ;;
         -i|--include) includes+=( "$2" ); shift ;;
         -e|--exclude) excludes+=( "$2" ); shift ;;
-        -t|--check) CHECK=1 ;;
         --use-rsync-update) use_rsync_update=1 ;;
         --do-remote) do_remote; exit $? ;;
         --do-rsync)  do_remote_rsync "${@:2}"; exit $? ;;
