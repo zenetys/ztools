@@ -89,7 +89,7 @@ function info() {
     local l=info
     [[ ${1:0:2} == -- ]] && l=${1:2} && shift
     for i in "$@"; do
-        printf '%s %s %s%s%s %s: %s\n' "$d" "$HOSTNAME" "${C[$l]}" "$l" "${C[reset]}" "$PROGNAME" "$i";
+        printf '%s %s %s%s%s %s: %s\n' "$d" "$HOSTNAME" "${C[$l]}" "$l" "${C[reset]}" "$PROGNAME" "${DRY_RUN:+DRY-RUN ** }$i";
     done
 }
 
@@ -259,10 +259,6 @@ function do_rsync() {
     for i in "${EXCLUDES[@]}"; do
         rsync_opts+=( --exclude "$i" )
     done
-
-    if [[ -n $DRY_RUN && -z $CHECK ]]; then
-        info "DRY-RUN mode is enabled"
-    fi
 
     for peer in "${PEERS[@]}"; do
         # bypass myself
