@@ -266,7 +266,7 @@ function do_rsync() {
 
         # list or diff changes
         if [[ -n $HAS_TTY || -n $DRY_RUN ]]; then
-            info "Check sync of ${C[blue]}${peer}${C[reset]}..."
+            info "Check sync of ${C[blue]}${peer}${C[reset]}"
             rsync "${rsync_opts[@]}" --dry-run --out-format "$dry_run_format" "${INCLUDES[@]}" "$peer:/" > "$ZSYNC_TEMPDIR/list"
             peer_retval=$?
 
@@ -296,7 +296,7 @@ function do_rsync() {
             confirm "Please confirm to ${C[error]}sync${C[reset]} files? [N/y] " || continue
         fi
 
-        info "Rsync to $peer..."
+        info "Rsync to $peer"
         rsync "${rsync_opts[@]}" --out-format "$sync_format" "${INCLUDES[@]}" "$peer:/"
         peer_retval=$?
 
