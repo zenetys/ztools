@@ -320,6 +320,7 @@ function do_keyscan() {
 peers=()
 includes=()
 excludes=()
+use_rsync_update=
 keyscan=
 argv=( "$@" )
 XDEBUG=
