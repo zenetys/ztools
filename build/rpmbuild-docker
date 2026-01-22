@@ -224,6 +224,20 @@ echo "PREBUILDSCRIPT: ${PREBUILDSCRIPT:-none}"
 echo "REPO: ${REPO:-none}"
 echo "SIGN: ${SIGN:-0}"
 
+docker_version=$(docker --version)
+if (( $? == 127 )); then
+    fatal 'Command docker --version failed with status 127, docker/podman environment not ready!'
+elif [[ ${docker_version,,} == *podman*  ]]; then
+    IS_PODMAN=1
+    IS_DOCKER=
+else
+    IS_PODMAN=
+    IS_DOCKER=1
+fi
+
+echo "IS_DOCKER: $IS_DOCKER"
+echo "IS_PODMAN: $IS_PODMAN"
+
 # Yum might take for ages to complete because it CLOEXEC on all available
 # file descriptors and recent dockers sets a very high default limit.
 # https://bugzilla.redhat.com/show_bug.cgi?id=1537564
@@ -461,6 +475,7 @@ DOCKER_OPTS=(
   ${GPG_SECRET_KEY_FILE:+--mount "type=bind,src=$GPG_SECRET_KEY_FILE,dst=/dev/shm/k,ro"}
   ${REPO:+--mount "type=bind,src=$REPO,dst=/tmp/local-repo"}
   ${PREBUILDSCRIPT:+--mount "type=bind,src=$PREBUILDSCRIPT,dst=/tmp/${PREBUILDSCRIPT##*/}"}
+  ${IS_PODMAN:+--userns keep-id --user 0}
 )
 
 function build_exit() {
