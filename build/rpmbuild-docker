@@ -452,6 +452,7 @@ DOCKER_OPTS=(
   --mount "type=bind,src=$SPECDIR/$SPECFILE,dst=/tmp/$SPECFILE"
   --mount "type=bind,src=$CACHEBASE/cache-yum-$DIST,dst=/var/cache/yum"
   --mount "type=bind,src=$CACHEBASE/cache-yum-$DIST,dst=/var/cache/dnf"
+  --mount "type=bind,src=$CACHEBASE/cache-yum-$DIST,dst=/var/cache/libdnf5"
   --mount "type=bind,src=$CACHEBASE/cache-shared,dst=/tmp/cache-shared"
   --mount "type=bind,src=$SOURCEDIR,dst=/tmp/shared/SOURCES"
   --mount "type=bind,src=$OUTPUTDIR/SRPMS,dst=/tmp/shared/SRPMS"
