@@ -211,8 +211,8 @@ if [[ -n $SIGN ]]; then
     GPG_SECRET_KEY=$(if [[ -n $GPG_PASSPHRASE_FILE ]]; then cat "$GPG_PASSPHRASE_FILE"
         else (set +x && echo "${!GPG_PASSPHRASE_ENV}"); fi |
       gpg --homedir "$GPG_HOMEDIR" --batch --passphrase-fd 0 --pinentry-mode loopback \
-        --armor --export-secret-keys --with-fingerprint "$GPG_KEYID") ||
-          fatal 'Failed to export GPG secret key'
+        --armor --export-secret-keys --with-fingerprint "$GPG_KEYID")
+    [[ $? != 0 || -z $GPG_SECRET_KEY ]] && fatal 'Failed to export GPG secret key'
   fi
 fi
 
