@@ -601,6 +601,10 @@ trap 'docker kill "$CTNAME"; exit;' INT
 cat <<__EOF__ |docker run "${DOCKER_OPTS[@]}" "$IMAGE" /bin/bash &
 declare -p HOSTNAME
 $(declare -p BGROUP BHOME BUSER DIST DIST_TYPE DIST_VERSION DOWNLOAD KEEP NOKEEP REPO RPMOPTS RPMBUILDOPTS RPMSPECOPTS SPECFILE UPDATE SIGN GPG_KEYID)
+# podman creates group/passwd entries when run with --userns keep-id,
+# but lets's normalize with docker, so reset them first
+sed -i -e "/^$BGROUP:/d" /etc/group
+sed -i -e "/^$BUSER:/d" /etc/passwd
 echo "$(getent group "$BGROUP")" >> /etc/group
 echo "$(getent passwd "$BUSER")" >> /etc/passwd
 ${GPG_SECRET_KEY:+(umask 0277 && (set +x && echo $(printf '%q\n' "$GPG_SECRET_KEY")) > /dev/shm/k && chown "\$BUSER" /dev/shm/k)}
