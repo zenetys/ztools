@@ -433,7 +433,7 @@ function git_archive_mtime() {
     "$1" ./ ':!rpmbuild-docker' ':!*.spec' ':!SPECS/' |
     tar x -C "$GIT_ARCHIVE_TMP/" || return 1
   find "$GIT_ARCHIVE_TMP/$3/" -not -type d -printf '%P\n' |
-    xargs -n 1 -I{} sh -c 'touch -d "$(git log --pretty=format:%ci -n 1 "$1" -- "$3")" "$2/$3"' -- \
+    xargs -I{} sh -c 'touch -d "$(git log --pretty=format:%ci -n 1 "$1" -- "$3")" "$2/$3"' -- \
       "$1" "$GIT_ARCHIVE_TMP/$3/" {} || return 1
   tar czf "$2.tar.gz" -C "$GIT_ARCHIVE_TMP/" "$3"
 }
