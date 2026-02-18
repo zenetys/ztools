@@ -76,6 +76,22 @@ OIDS_dot1d=(
   ${OID_dot1dTpFdbPort:=.1.3.6.1.2.1.17.4.3.1.2} # community@vlan on cisco except sb
 )
 
+OIDS_dot1dStp=(
+  #${OID_dot1dStpProtocolSpecification:=.1.3.6.1.2.1.17.2.1}
+  #${OID_dot1dStpPriority:=.1.3.6.1.2.1.17.2.2}
+  #${OID_dot1dStpTimeSinceTopologyChange:=.1.3.6.1.2.1.17.2.3}
+  #${OID_dot1dStpTopChanges:=.1.3.6.1.2.1.17.2.4}
+  #${OID_dot1dStpDesignatedRoot:=.1.3.6.1.2.1.17.2.5}
+  #${OID_dot1dStpRootCost:=.1.3.6.1.2.1.17.2.7}
+  #${OID_dot1dStpRootPort:=.1.3.6.1.2.1.17.2.8}
+  #${OID_dot1dStpPortState:=.1.3.6.1.2.1.17.2.15.1.3}
+  #${OID_dot1dStpPortDesignatedRoot:=.1.3.6.1.2.1.17.2.15.1.8}
+  #${OID_dot1dStpPortDesignatedCost:=.1.3.6.1.2.1.17.2.15.1.9}
+  #${OID_dot1dStpPortDesignatedBridge:=.1.3.6.1.2.1.17.2.15.1.10}
+  #${OID_dot1dStpPortDesignatedPort:=.1.3.6.1.2.1.17.2.15.1.11}
+  ${OID_dot1dStp:=.1.3.6.1.2.1.17.2}
+)
+
 OIDS_dot1q=(
   ${OID_dot1qVlanFdbId:=.1.3.6.1.2.1.17.7.1.4.2.1.3} # .<ignore>.<vlan> = <fdb-id> (usually equals)
   ${OID_dot1qTpFdbPort:=.1.3.6.1.2.1.17.7.1.2.2.1.2} # .<fdb-id>.<mac> = <port>
@@ -503,6 +519,9 @@ pqueue-register snmp -n 'x-snmp-lldpRem' \
 
 pqueue-register snmp-std -n 'x-snmp-dot1d' \
   cb-snmp walk "${OIDS_dot1d[@]}"
+
+pqueue-register snmp-std -n 'x-snmp-dot1dStp' \
+  cb-snmp walk "${OIDS_dot1dStp[@]}"
 
 pqueue-register snmp-std -n 'x-snmp-dot1q' \
   cb-snmp walk "${OIDS_dot1q[@]}"
