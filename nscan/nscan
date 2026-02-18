@@ -549,11 +549,13 @@ if [[ -n $COLOR ]]; then
   exec 2> >(pretty_stderr)
 fi
 
-if [[ -n $TMPDIR ]]; then declare -rx TMPDIR+="/$PROGNAME.$RANDOM"
-elif [[ -d /dev/shm/. ]]; then declare -rx TMPDIR="/dev/shm/$PROGNAME.$RANDOM"
-elif [[ -d /var/tmp/. ]]; then declare -rx TMPDIR="/var/tmp/$PROGNAME.$RANDOM"
-else declare -rx TMPDIR="/tmp/$PROGNAME.$RANDOM"
+if [[ -n $TMPDIR ]]; then declare -rx TMPDIR=$(mktemp -d -p "$TMPDIR" "$PROGNAME.XXXXXXXXXX")
+elif [[ -d /dev/shm/. ]]; then declare -rx TMPDIR=$(mktemp -d -p /dev/shm "$PROGNAME.XXXXXXXXXX")
+elif [[ -d /var/tmp/. ]]; then declare -rx TMPDIR=$(mktemp -d -p /var/tmp "$PROGNAME.XXXXXXXXXX")
+else declare -rx TMPDIR=$(mktemp -d -p /tmp "$PROGNAME.XXXXXXXXXX")
 fi
+
+[[ -d $TMPDIR/. ]] || { echo "Failed to create TMPDIR" >&2; exit 2; }
 
 function on_exit() {
   if [[ -n $TMPDIR && -d $TMPDIR/. ]]; then
@@ -566,8 +568,6 @@ function on_exit() {
     echo -n $'\x1b[0m' >&2
   fi
 }
-
-mkdir -p "$TMPDIR" || { echo "Failed to create TMPDIR" >&2; exit 2; }
 trap on_exit EXIT
 
 for (( i=0; i<${#TARGETS[@]}; i++ )); do
