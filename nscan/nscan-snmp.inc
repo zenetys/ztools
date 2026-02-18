@@ -92,6 +92,17 @@ OIDS_dot1dStp=(
   ${OID_dot1dStp:=.1.3.6.1.2.1.17.2}
 )
 
+OIDS_rstp=(
+  #${OID_dot1dStpVersion:=.1.3.6.1.2.1.134.1.1.1.0} # STP=0, RSTP=2, MSTP=3
+  #${OID_dot1dStpPortProtocolMigration:=.1.3.6.1.2.1.134.1.2.1.1.3}
+  #${OID_dot1dStpPortAdminEdgePort:=.1.3.6.1.2.1.134.1.2.1.1.4}
+  #${OID_dot1dStpPortOperEdgePort:=.1.3.6.1.2.1.134.1.2.1.1.5}
+  #${OID_dot1dStpPortAdminPointToPoint:=.1.3.6.1.2.1.134.1.2.1.1.6}
+  #${OID_dot1dStpPortOperPointToPoint:=.1.3.6.1.2.1.134.1.2.1.1.7}
+  #${OID_dot1dStpPortAdminPathCost:=.1.3.6.1.2.1.134.1.2.1.1.8}
+  ${OID_rstpMIB:=.1.3.6.1.2.1.134}
+)
+
 OIDS_dot1q=(
   ${OID_dot1qVlanFdbId:=.1.3.6.1.2.1.17.7.1.4.2.1.3} # .<ignore>.<vlan> = <fdb-id> (usually equals)
   ${OID_dot1qTpFdbPort:=.1.3.6.1.2.1.17.7.1.2.2.1.2} # .<fdb-id>.<mac> = <port>
@@ -522,6 +533,9 @@ pqueue-register snmp-std -n 'x-snmp-dot1d' \
 
 pqueue-register snmp-std -n 'x-snmp-dot1dStp' \
   cb-snmp walk "${OIDS_dot1dStp[@]}"
+
+pqueue-register snmp-std -n 'x-snmp-rstp' \
+  cb-snmp walk "${OIDS_rstp[@]}"
 
 pqueue-register snmp-std -n 'x-snmp-dot1q' \
   cb-snmp walk "${OIDS_dot1q[@]}"
