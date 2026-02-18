@@ -573,9 +573,9 @@ trap on_exit EXIT
 for (( i=0; i<${#TARGETS[@]}; i++ )); do
   if ! is-ipv4 "${TARGETS[i]}" && ! is-ipv4-network "${TARGETS[i]}"; then
       # need an ip, try to resolve
-      REPLY=$(_host -t A "$i" |sed -nre 's/^.* has address (.+)$/\1/p;q')
+      REPLY=$(_host -t A "${TARGETS[i]}" |sed -nre 's/^.* has address (.+)$/\1/p;q')
       if ! is-ipv4 "$REPLY"; then
-        echo "Failed resolve an IPv4 address from $i" >&2
+        echo "Failed resolve an IPv4 address from ${TARGETS[i]}" >&2
         continue
       fi
       TARGETS[i]=$REPLY
