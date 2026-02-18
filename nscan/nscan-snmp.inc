@@ -267,7 +267,7 @@ function extract-snmp-data() {
 # Option -X masks the memory
 function _snmpcmd() {
   local IFS=$MYIFS
-  local out=$(mktemp) || return 1
+  local out=$(mktemp -p "$TMPDIR") || return 1
   [[ $1 == -X ]] && { declare -A MEMORY_VAL=(); shift; } # mask memory
   local subcred=default vlan=;  [[ $1 == -V ]] && { subcred=vlan; vlan=$2; shift 2; }
   local cmd=$1; shift # get or walk
