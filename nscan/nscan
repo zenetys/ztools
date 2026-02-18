@@ -549,7 +549,7 @@ if [[ -n $COLOR ]]; then
   exec 2> >(pretty_stderr)
 fi
 
-if [[ -n $TMPDIR ]]; then declare -rx TMPDIR+="/$RPOGNAME.$RANDOM"
+if [[ -n $TMPDIR ]]; then declare -rx TMPDIR+="/$PROGNAME.$RANDOM"
 elif [[ -d /dev/shm/. ]]; then declare -rx TMPDIR="/dev/shm/$PROGNAME.$RANDOM"
 elif [[ -d /var/tmp/. ]]; then declare -rx TMPDIR="/var/tmp/$PROGNAME.$RANDOM"
 else declare -rx TMPDIR="/tmp/$PROGNAME.$RANDOM"
