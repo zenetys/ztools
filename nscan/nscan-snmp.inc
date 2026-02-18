@@ -206,6 +206,16 @@ OIDS_pagpGroup=(
   ${OID_pagpGroupIfIndex:=.1.3.6.1.4.1.9.9.98.1.1.1.1.8} # .ifIndex = ifIndex
 )
 
+OIDS_stpx=(
+  #${OID_stpxSpanningTreeType:=.1.3.6.1.4.1.9.9.82.1.1.1.0} # pvstPlus/mst/rapidPvstPlus
+  #${OID_stpxRSTPPortRoleValue:=.1.3.6.1.4.1.9.9.82.1.6.2.1.3} # root/designated/alternate/backup
+  #${OID_stpxRootGuardConfigEnabled:=.1.3.6.1.4.1.9.9.82.1.4.2.1.2}
+  #${OID_stpxLoopGuardConfigEnabled:=.1.3.6.1.4.1.9.9.82.1.9.3.1.5}
+  #${OID_stpxPVSTVlanEnable:=.1.3.6.1.4.1.9.9.82.1.2.2.1.4}
+  #${OID_stpxRSTPPortOperStatus:=.1.3.6.1.4.1.9.9.82.1.6.2.1.4}
+  ${OID_stpxMIB:=.1.3.6.1.4.1.9.9.82}
+)
+
 OIDS_stackPort=(
   ${OID_stackPortIfIndex:=.1.3.6.1.4.1.9.5.1.4.1.1.11}
   ${OID_vlanPortIslOperStatus:=.1.3.6.1.4.1.9.5.1.9.3.1.8} # prefer to vlanTrunkPortDynamicStatus if available
@@ -566,6 +576,9 @@ pqueue-register snmp-cisco-std -n 'x-snmp-pagpGroup' \
 
 pqueue-register snmp-cisco-std -n 'x-snmp-stackPort' \
   cb-snmp walk "${OIDS_stackPort[@]}"
+
+pqueue-register snmp-cisco-std -n 'x-snmp-stpx' \
+  cb-snmp walk "${OIDS_stpx[@]}"
 
 pqueue-register snmp-cisco-vlan \
   cb-snmp-cisco-fdb
