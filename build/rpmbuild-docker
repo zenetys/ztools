@@ -512,16 +512,6 @@ function build_main() {
   mkdir -p -m 700 "$BHOME"
   chown "$BUSER:$BGROUP" "$BHOME"
 
-  if [[ -n $SIGN ]]; then
-    signreq=()
-    for i in rpm-sign gnupg2; do rpm -q "$i" || signreq+=( "$i" ); done
-    [[ -n $signreq ]] && yum install -y "${signreq[@]}"
-    build_runuser mkdir -m 700 /dev/shm/g
-    build_runuser ln -sT /dev/shm/g "$BHOME/.gnupg"
-    build_runuser sh -exc 'GPG_TTY= gpg --passphrase-file /dev/shm/.p \
-      --pinentry-mode loopback --import /dev/shm/k'
-  fi
-
   mkdir /tmp/build
   chown "$BUSER:$BGROUP" /tmp/{build,shared}
   ln -s ../shared/SOURCES /tmp/build/
@@ -546,6 +536,16 @@ EOF
       *.inc) source "/tmp/$PREBUILDSCRIPT" ;;
       *) echo 'Invalid prebuild script/source file'; exit 1 ;;
     esac
+  fi
+
+  if [[ -n $SIGN ]]; then
+    signreq=()
+    for i in rpm-sign gnupg2; do rpm -q "$i" || signreq+=( "$i" ); done
+    [[ -n $signreq ]] && yum install -y "${signreq[@]}"
+    build_runuser mkdir -m 700 /dev/shm/g
+    build_runuser ln -sT /dev/shm/g "$BHOME/.gnupg"
+    build_runuser sh -exc 'GPG_TTY= gpg --passphrase-file /dev/shm/.p \
+      --pinentry-mode loopback --import /dev/shm/k'
   fi
 
   # Having _topdir /tmp causes problems in el6/el7 because it is not long enough
