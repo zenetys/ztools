@@ -539,7 +539,7 @@ EOF
   fi
 
   if [[ -n $SIGN ]]; then
-    signreq=()
+    signreq=( openssl-libs )
     for i in rpm-sign gnupg2; do rpm -q "$i" || signreq+=( "$i" ); done
     [[ -n $signreq ]] && yum install -y "${signreq[@]}"
     build_runuser mkdir -m 700 /dev/shm/g
