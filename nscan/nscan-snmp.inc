@@ -116,6 +116,10 @@ OIDS_dot1q=(
   ${OID_dot1qVlanCurrentUntaggedPorts:=.1.3.6.1.2.1.17.7.1.4.2.1.5} # .<ignore>.<vlan> = <ports-bits>
 )
 
+OIDS_entPhysical=(
+  ${OID_entPhysicalTable:=.1.3.6.1.2.1.47.1.1.1.1}
+)
+
 OIDS_lldpLoc=(
   #${OID_lldpLocSysName:=.1.0.8802.1.1.2.1.3.3.0}
   #${OID_lldpLocPortIdSubtype:=.1.0.8802.1.1.2.1.3.7.1.2}
@@ -531,6 +535,9 @@ pqueue-register snmp -n 'x-snmp-dot3adAgg' \
 
 pqueue-register snmp -n 'x-snmp-dot3Stats' \
   cb-snmp walk "${OIDS_dot3Stats[@]}"
+
+pqueue-register snmp -n 'x-snmp-entPhysical' \
+  cb-snmp walk "${OIDS_entPhysical[@]}"
 
 pqueue-register snmp -n 'x-snmp-lldpLoc' \
   cb-snmp walk "${OIDS_lldpLoc[@]}"
