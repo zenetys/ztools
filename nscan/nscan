@@ -555,7 +555,9 @@ elif [[ -d /var/tmp/. ]]; then declare -rx TMPDIR=$(mktemp -d -p /var/tmp "$PROG
 else declare -rx TMPDIR=$(mktemp -d -p /tmp "$PROGNAME.XXXXXXXXXX")
 fi
 
-[[ -d $TMPDIR/. ]] || { echo "Failed to create TMPDIR" >&2; exit 2; }
+[[ $TMPDIR ]] || { echo "Failed to create TMPDIR" >&2; exit 2; }
+
+[[ -d $TMPDIR/. ]] || { echo "TMPDIR is not a directory" >&2; exit 2; }
 
 function on_exit() {
   if [[ -n $TMPDIR && -d $TMPDIR/. ]]; then
