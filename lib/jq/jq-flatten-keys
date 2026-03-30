@@ -1,0 +1,5 @@
+#!/bin/bash
+jq "-L${0%/*}" "
+    include \"util\";
+    . |flatten_keys
+" "${@:2}"
