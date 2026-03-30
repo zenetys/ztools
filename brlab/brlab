@@ -1,0 +1,77 @@
+#!/bin/bash
+
+PROGNAME=${0##*/}
+BRPFX=${BRPFX-br}
+BRGROUP=${BRGROUP:-brlab}
+BRPORTS=${BRPORTS:-0}
+
+function exit_usage() {
+    local status=${1:-0}
+    [[ $status == 0 ]] || exec >&2
+    echo "Usage: $PROGNAME start|stop NAME [CIDR]"
+    exit "$status"
+}
+
+# $1: name
+# $2: cidr
+function start() {
+    local name=$1; shift
+    local cidr=$1; shift
+    local basemac i imac
+    printf -v basemac '%02x:%02x:%02x:%02x:%02x' \
+        $(((RANDOM%128)&0x02)) $((RANDOM%256)) $((RANDOM%256)) \
+        $((RANDOM%256)) $((RANDOM%256))
+    ip link add name "${BRPFX}${name}" type bridge #stp_state 1
+    ip link set address "$basemac:00" dev "${BRPFX}${name}"
+    ip link set up dev "${BRPFX}${name}"
+    for i in $(seq 0 $((BRPORTS-1))); do
+        ip tuntap add name "${BRPFX}${name}_$i" mode tap group "$BRGROUP"
+        ip link set "${BRPFX}${name}_$i" master "${BRPFX}${name}"
+        printf -v imac %02x "$((i+1))"
+        ip link set address "$basemac:$imac" dev "${BRPFX}${name}_$i"
+        ip link set up dev "${BRPFX}${name}_$i"
+    done
+    if [[ -n $cidr ]]; then
+        ip addr add "$cidr" dev "${BRPFX}${name}"
+    fi
+}
+
+# $1: name
+function stop() {
+    local name=$1; shift
+    local i
+    ip link set down dev "${BRPFX}${name}"
+    ip link del "${BRPFX}${name}" type bridge
+    for i in $(seq 0 $((BRPORTS-1))); do
+        ip tuntap del name "${BRPFX}${name}_$i" mode tap
+    done
+}
+
+while (( $# > 0 )); do
+    case "$1" in
+        -h|--help) exit_usage 0 ;;
+        --) shift; break ;;
+        -*) exit_usage 1 ;;
+        *) break ;;
+    esac
+    shift
+done
+
+action=$1; shift
+name=$1; shift
+cidr=$1; shift
+
+[[ -n $name ]] || exit_usage 1
+
+# max interface length is 15
+lmaxiface="${BRPFX}${name}_$((BRPORTS-1))"
+if (( ${#lmaxiface} > 15 )); then
+    echo "$PROGNAME: name too long, abort"
+    exit 2
+fi
+
+case "$action" in
+    start) start "$name" "$cidr" ;;
+    stop) stop "$name" ;;
+    *) exit_usage 1
+esac

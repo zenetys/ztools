@@ -1,0 +1,15 @@
+[Unit]
+Description=Bridge brlab0
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=BRPFX=br
+Environment=BRGROUP=brlab
+Environment=BRPORTS=0
+ExecStart=/opt/ztools/bin/brlab start lab0 172.29.42.1/24
+ExecStop=/opt/ztools/bin/brlab stop lab0
+
+[Install]
+WantedBy=multi-user.target
