@@ -1,5 +1,5 @@
 #!/bin/bash
-## 
+##
 ## Simple CGI library to be defined as shebang
 ## Copyright 2020 - Zenetys
 ## License: MIT
@@ -94,7 +94,7 @@ function var_decode() {
   local prefix="$1" ; shift
   local url_decode=${url_decode:-0}
   local sub var val
-  
+
   for sub in $*; do
     [[ $sub ]] || continue
     var=${sub%%=*}             # get variable name
