@@ -51,7 +51,7 @@ declare VERBOSE=$VERBOSE
 declare XDEBUG=$XDEBUG
 declare ARGS=()
 
-declare CACHEBASE=${CACHEBASE:-/tmp}
+declare CACHEBASE=${CACHEBASE:-/tmp/rpmbuild-$(id -un)}
 declare DIST=
 declare REPO=$REPO
 declare UPDATE=
